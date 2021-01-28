@@ -82,12 +82,8 @@ void Error_Handler(void);
 #define OFFSET_GPIO_Port GPIOA
 #define SUBDIV_Pin GPIO_PIN_4
 #define SUBDIV_GPIO_Port GPIOA
-#define TRIM_Pin GPIO_PIN_5
-#define TRIM_GPIO_Port GPIOA
 #define GP_AIN1_Pin GPIO_PIN_6
 #define GP_AIN1_GPIO_Port GPIOA
-#define GP_AIN2_Pin GPIO_PIN_7
-#define GP_AIN2_GPIO_Port GPIOA
 #define EXP_Pin GPIO_PIN_4
 #define EXP_GPIO_Port GPIOC
 #define EXP_SW_Pin GPIO_PIN_5
@@ -98,10 +94,10 @@ void Error_Handler(void);
 #define TAP_GPIO_Port GPIOB
 #define HARM_SW_Pin GPIO_PIN_2
 #define HARM_SW_GPIO_Port GPIOB
-#define GPIO_1_Pin GPIO_PIN_10
-#define GPIO_1_GPIO_Port GPIOB
-#define GPIO_2_Pin GPIO_PIN_11
-#define GPIO_2_GPIO_Port GPIOB
+#define BYP_RELAY_Pin GPIO_PIN_10
+#define BYP_RELAY_GPIO_Port GPIOB
+#define SPI_DC_Pin GPIO_PIN_11
+#define SPI_DC_GPIO_Port GPIOB
 #define PWM1_Pin GPIO_PIN_6
 #define PWM1_GPIO_Port GPIOC
 #define PWM2_Pin GPIO_PIN_7
@@ -110,10 +106,10 @@ void Error_Handler(void);
 #define PWM3_GPIO_Port GPIOC
 #define PWM4_Pin GPIO_PIN_9
 #define PWM4_GPIO_Port GPIOC
-#define GPIO_3_Pin GPIO_PIN_8
-#define GPIO_3_GPIO_Port GPIOA
-#define GPIO_4_Pin GPIO_PIN_11
-#define GPIO_4_GPIO_Port GPIOA
+#define SPI_RST_Pin GPIO_PIN_8
+#define SPI_RST_GPIO_Port GPIOA
+#define SPI_CS_Pin GPIO_PIN_11
+#define SPI_CS_GPIO_Port GPIOA
 #define GPIO_5_Pin GPIO_PIN_12
 #define GPIO_5_GPIO_Port GPIOA
 #define GPIO_6_Pin GPIO_PIN_15
@@ -134,11 +130,14 @@ void Error_Handler(void);
 #define GP_SW_3_GPIO_Port GPIOB
 #define GP_SW_4_Pin GPIO_PIN_7
 #define GP_SW_4_GPIO_Port GPIOB
-#define GP_PWM_1_Pin GPIO_PIN_8
-#define GP_PWM_1_GPIO_Port GPIOB
-#define GP_PWM_2_Pin GPIO_PIN_9
-#define GP_PWM_2_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
+
+// 2^10 bits resolution gives a switching frequency of 23kHz at 48MHz clock speed
+#define PWM_PERIOD 0x400
+#define WAVETABLE_WIDTH 0x400
+
+
+#define MIN_LFO_PERIOD																																																																																	`
 
 
 

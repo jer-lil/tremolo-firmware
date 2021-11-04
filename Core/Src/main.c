@@ -171,18 +171,20 @@ int main(void)
 		  prev_offset = Adc.Offset;
 	  }
 	  */
+	  /*
 	  TriangleWave_Generate(Adc.Depth, Adc.Offset);
 
 	  uint32_t new_period = 0x4444 - (Adc.Rate << 4);
 
 	  TIM16->ARR = new_period;
-
+	   */
 	  //HAL_UART_Transmit(&s_UARTHandle, buffer, sizeof(buffer), HAL_MAX_DELAY);
 
-	  /*
+
 	  TIM_OC_InitTypeDef sConfigOC = {0};
 	  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-	  sConfigOC.Pulse = dma_wavetable[i];
+	  //sConfigOC.Pulse = dma_wavetable[i];
+	  sConfigOC.Pulse = 511;
 	  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
 	  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
 
@@ -194,7 +196,7 @@ int main(void)
 	  {
 		  Error_Handler();
 	  }
-	  sConfigOC.Pulse = PWM_PERIOD - dma_wavetable[i];
+	  //sConfigOC.Pulse = PWM_PERIOD - dma_wavetable[i];
 	  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
 	  {
 		  Error_Handler();
@@ -209,7 +211,7 @@ int main(void)
 		HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 		HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
 		HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
-	*/
+
 
 	  GPIO_PinState bypass_state = HAL_GPIO_ReadPin(BYPASS_GPIO_Port, BYPASS_Pin);
 	  HAL_GPIO_WritePin(LED_RGB_Red_GPIO_Port, LED_RGB_Red_Pin, bypass_state);

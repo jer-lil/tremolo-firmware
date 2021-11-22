@@ -1,0 +1,22 @@
+!SESSION 2021-11-13 18:35:52.391 -----------------------------------------------
+eclipse.buildId=Version 1.5.0
+java.version=1.8.0_272
+java.vendor=AdoptOpenJDK
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_US
+Framework arguments:  C:\Users\jeremiah\Pinebox\tremolo-firmware\Tremolo Firmware R02\.project
+Command-line arguments:  -os win32 -ws win32 -arch x86_64 -data C:\Users\jeremiah\Pinebox\tremolo-firmware\Tremolo Firmware R02 C:\Users\jeremiah\Pinebox\tremolo-firmware\Tremolo Firmware R02\.project
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2021-11-13 18:35:57.312
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2021-11-13 18:35:57.363
+!MESSAGE Log4j initialized with config file C:\Users\jeremiah\Pinebox\tremolo-firmware\Tremolo Firmware R02\.metadata\.log4j.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2021-11-13 18:35:58.870
+!MESSAGE Started RMI Server, listening on port 41337
+
+!ENTRY org.eclipse.cdt.core 1 0 2021-11-13 18:36:20.101
+!MESSAGE Indexed 'Tremolo V2' (21 sources, 98 headers) in 2.41 sec: 8,148 declarations; 30,411 references; 6 unresolved inclusions; 292 syntax errors; 1,129 unresolved names (2.8%)
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 4 4 2021-11-13 18:36:28.446
+!MESSAGE com.st.stm32cube.ide.mcu.ide/META-INF/version/build_ref file not found, build reference will not be reported into properties

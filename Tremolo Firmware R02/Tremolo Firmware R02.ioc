@@ -1,4 +1,5 @@
 #MicroXplorer Configuration settings - do not modify
+ADC1.AWD1ITMode=ENABLE
 ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_1
 ADC1.ClockPrescaler=ADC_CLOCK_SYNC_PCLK_DIV1
 ADC1.ContinuousConvMode=ENABLE
@@ -7,7 +8,7 @@ ADC1.EOCSelection=ADC_EOC_SEQ_CONV
 ADC1.EnableAnalogWatchDog1=true
 ADC1.EnableInjectedConversion=DISABLE
 ADC1.ExternalTrigConv=ADC_SOFTWARE_START
-ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,OffsetNumber-0\#ChannelRegularConversion,Offset-0\#ChannelRegularConversion,NbrOfConversionFlag,ClockPrescaler,ContinuousConvMode,master,EnableInjectedConversion,Rank1_Channel,Rank2_Channel,NbrOfConversion,ExternalTrigConv,Resolution,Mode,EOCSelection,DMAContinuousRequests,EnableAnalogWatchDog1
+ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,OffsetNumber-0\#ChannelRegularConversion,Offset-0\#ChannelRegularConversion,NbrOfConversionFlag,ClockPrescaler,ContinuousConvMode,master,EnableInjectedConversion,Rank1_Channel,Rank2_Channel,NbrOfConversion,ExternalTrigConv,Resolution,Mode,EOCSelection,DMAContinuousRequests,EnableAnalogWatchDog1,AWD1ITMode
 ADC1.Mode=ADC_MODE_INDEPENDENT
 ADC1.NbrOfConversion=1
 ADC1.NbrOfConversionFlag=1

@@ -98,6 +98,15 @@ int main(void)
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
+  /* Start DMA conversion of ADC data into buffer of raw readings */
+  HAL_ADC_Start_DMA(&hadc1, &ADC_VALUES, 10);
+
+  /* Start TIM8 and enable DMA for wavetable transfer and period change */
+  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1);
+  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint16_t)wavetable_sine, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)wave_period, (uint32_t)&(TIM8->ARR), WAVETABLE_WIDTH);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

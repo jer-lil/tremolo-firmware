@@ -62,6 +62,15 @@ void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+typedef struct ADC_READINGS {
+	uint16_t Rate;
+	uint16_t Depth;
+	uint16_t Shape;
+	uint16_t Offset;
+	uint16_t Subdiv;
+	uint16_t Trim;
+} Adc;
+
 /* USER CODE END 0 */
 
 /**
@@ -84,6 +93,8 @@ int main(void)
   /* Iniitalize state machines */
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
+
+  Adc adc_raw;
 
   /* Call state machines to action on initial states */
   /* TODO can this be done before peripheral initialization? */
@@ -108,7 +119,12 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
+
   /* USER CODE BEGIN 2 */
+
+
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&adc_raw, ADC_DMA_BUF_LENGTH);
+
 
   /* USER CODE END 2 */
 
@@ -126,6 +142,7 @@ int main(void)
 	  }
 	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
 
+	  uint32_t rate = adc_raw.Rate;
 	  //HAL_Delay(100);
   }
     /* USER CODE END WHILE */

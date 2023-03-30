@@ -142,8 +142,15 @@ void Error_Handler(void);
 #define TIM2_PERIOD 1023
 #define TIM3_PERIOD 1023
 
+/* I do not know why this is 11, it just works */
+#define ADC_DMA_BUF_LENGTH 6
+
 /* Toggle heartbead LED every 500ms */
 #define HEARTBEAT_MS 500
+
+/* Map LEDs as inverted GPIO */
+#define LED_PIN_SET GPIO_PIN_RESET
+#define LED_PIN_RESET GPIO_PIN_SET
 
 /* Temp remapping of bypass switch pin+port to LED */
 #define pDOUT_BYP_Pin pDOUT_LED2_B_Pin

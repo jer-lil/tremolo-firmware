@@ -11,6 +11,7 @@ RM := rm -rf
 -include sources.mk
 -include Drivers/STM32F3xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
+-include Core/Src/lib/subdir.mk
 -include Core/Src/subdir.mk
 -include objects.mk
 
@@ -60,8 +61,8 @@ all: main-build
 main-build: tremolo_test.elf secondary-outputs
 
 # Tool invocations
-tremolo_test.elf tremolo_test.map: $(OBJS) $(USER_OBJS) C:\Users\jeremiah\BlackBox\tremolo_test_temp\STM32F303RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "tremolo_test.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\jeremiah\BlackBox\tremolo_test_temp\STM32F303RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="tremolo_test.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+tremolo_test.elf tremolo_test.map: $(OBJS) $(USER_OBJS) C:\Users\jeremiah\BlackBox\tremolo-firmware\tremolo-test\STM32F303RETX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "tremolo_test.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\Users\jeremiah\BlackBox\tremolo-firmware\tremolo-test\STM32F303RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="tremolo_test.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

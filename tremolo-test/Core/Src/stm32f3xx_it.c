@@ -242,7 +242,7 @@ void TIM4_IRQHandler(void)
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
 
-  HAL_TIM_IC_CaptureCallback(&htim4)
+  HAL_TIM_IC_CaptureCallback(&htim4);
 
   /* USER CODE END TIM4_IRQn 1 */
 }

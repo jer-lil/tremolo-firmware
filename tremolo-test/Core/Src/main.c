@@ -27,6 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include "lib/sm_bypass.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +55,8 @@
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -76,6 +80,15 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+
+  /* Iniitalize state machines */
+  StateBypassSw state_bypass_sw = STATE_IDLE;
+  StateEffect state_effect = STATE_BYPASS;
+
+  /* Call state machines to action on initial states */
+  /* TODO can this be done before peripheral initialization? */
+
+  /* Initialize wavetable into RAM (TODO) */
 
   /* USER CODE END Init */
 
@@ -103,39 +116,17 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  static uint32_t tick;
+	  // Toggle heartbeat LED
+	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
 
-
-	  tick = HAL_GetTick();
-
-	  if (tick & 0x00000001)
-	  {
-		  HAL_GPIO_TogglePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
-
+	  // Check for bypass switch state and run state machine
+	  EventBypassSw event = EVENT_RELEASED;
+	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
+		  event = EVENT_PRESSED;
 	  }
+	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
 
-	  HAL_Delay(100);
-
-	  tick = HAL_GetTick();
-
-	  if (tick & 0x00000001)
-	  {
-		  HAL_GPIO_TogglePin(pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin);
-
-	  }
-
-	  HAL_Delay(100);
-
-	  tick = HAL_GetTick();
-
-	  if (tick & 0x00000001)
-	  {
-		  HAL_GPIO_TogglePin(pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin);
-
-	  }
-
-	  HAL_Delay(100);
-
+	  //HAL_Delay(100);
   }
     /* USER CODE END WHILE */
 
@@ -198,6 +189,17 @@ void SystemClock_Config(void)
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 
+}
+
+/* Toggles LED if it's been longer than timout_ms since last toggle*/
+void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_Pin){
+	static uint32_t last_toggle_ms = 0;
+	uint32_t tick = HAL_GetTick();
+
+	if (tick - last_toggle_ms >= timeout_ms){
+		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
+		last_toggle_ms = tick;
+	}
 }
 
 /* USER CODE END 4 */

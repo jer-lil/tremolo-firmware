@@ -142,6 +142,13 @@ void Error_Handler(void);
 #define TIM2_PERIOD 1023
 #define TIM3_PERIOD 1023
 
+/* Toggle heartbead LED every 500ms */
+#define HEARTBEAT_MS 500
+
+/* Temp remapping of bypass switch pin+port to LED */
+#define pDOUT_BYP_Pin pDOUT_LED2_B_Pin
+#define pDOUT_BYP_GPIO_Port pDOUT_LED2_B_GPIO_Port
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

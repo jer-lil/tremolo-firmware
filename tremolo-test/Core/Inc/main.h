@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define TIM2_PERIOD 1023
+#define TIM3_PERIOD 1023
 #define pDOUT_MUTE_11_Pin GPIO_PIN_13
 #define pDOUT_MUTE_11_GPIO_Port GPIOC
 #define pDOUT_MUTE_2_Pin GPIO_PIN_14
@@ -143,7 +145,7 @@ void Error_Handler(void);
 #define TIM3_PERIOD 1023
 
 /* I do not know why this is 11, it just works */
-#define ADC_DMA_BUF_LENGTH 6
+#define ADC_DMA_BUF_LENGTH 9
 
 /* Toggle heartbead LED every 500ms */
 #define HEARTBEAT_MS 500

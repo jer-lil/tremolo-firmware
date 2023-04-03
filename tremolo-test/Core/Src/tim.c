@@ -329,7 +329,7 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef* tim_pwmHandle)
     __HAL_LINKDMA(tim_pwmHandle,hdma[TIM_DMA_ID_COMMUTATION],hdma_tim8_ch4_trig_com);
 
     /* TIM8 interrupt Init */
-    HAL_NVIC_SetPriority(TIM8_UP_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(TIM8_UP_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(TIM8_UP_IRQn);
   /* USER CODE BEGIN TIM8_MspInit 1 */
 
@@ -388,7 +388,7 @@ void HAL_TIM_IC_MspInit(TIM_HandleTypeDef* tim_icHandle)
     __HAL_LINKDMA(tim_icHandle,hdma[TIM_DMA_ID_CC2],hdma_tim4_ch2);
 
     /* TIM4 interrupt Init */
-    HAL_NVIC_SetPriority(TIM4_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(TIM4_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(TIM4_IRQn);
   /* USER CODE BEGIN TIM4_MspInit 1 */
 

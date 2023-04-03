@@ -62,14 +62,19 @@ void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-typedef struct ADC_READINGS {
+typedef struct __attribute__((packed)) {
 	uint16_t Rate;
 	uint16_t Depth;
 	uint16_t Shape;
 	uint16_t Offset;
 	uint16_t Subdiv;
-	uint16_t Trim;
+	uint16_t Exp;
+	uint16_t Trim1;
+	uint16_t Trim2;
+	uint16_t Vol;
 } Adc;
+
+volatile uint16_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
 
 /* USER CODE END 0 */
 
@@ -94,7 +99,11 @@ int main(void)
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
 
-  Adc adc_raw;
+  Adc* adc_raw;
+
+
+  //int i = 0;
+  //for (int i; i<ADC_DMA_BUF_LENGTH; i++)
 
   /* Call state machines to action on initial states */
   /* TODO can this be done before peripheral initialization? */
@@ -112,18 +121,17 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
-  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
-
   /* USER CODE BEGIN 2 */
 
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&adc_raw, ADC_DMA_BUF_LENGTH);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw, ADC_DMA_BUF_LENGTH);
 
 
   /* USER CODE END 2 */
@@ -132,8 +140,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+	  HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
+	  uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
+
 	  // Toggle heartbeat LED
 	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
+
 
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event = EVENT_RELEASED;
@@ -142,7 +155,11 @@ int main(void)
 	  }
 	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
 
-	  uint32_t rate = adc_raw.Rate;
+	  //uint16_t raw;
+	  //uint32_t rate = adc_raw.Rate;
+	  //HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+	  //raw = HAL_ADC_GetValue(&hadc1);
+
 	  //HAL_Delay(100);
   }
     /* USER CODE END WHILE */
@@ -190,11 +207,13 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM8
-                              |RCC_PERIPHCLK_TIM2|RCC_PERIPHCLK_TIM34;
+                              |RCC_PERIPHCLK_ADC12|RCC_PERIPHCLK_TIM2
+                              |RCC_PERIPHCLK_TIM34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
+  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV8;
   PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_HCLK;
-  PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_HCLK;
-  PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_HCLK;
+  PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_PLLCLK;
+  PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_PLLCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -207,6 +226,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 
 }
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+	uint32_t tick = HAL_GetTick();
+	uint16_t adc_raw = HAL_ADC_GetValue(&hadc1);
+	//HAL_ADC_Start(&hadc1);
+}
+
+
+
 
 /* Toggles LED if it's been longer than timout_ms since last toggle*/
 void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_Pin){

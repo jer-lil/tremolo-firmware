@@ -62,7 +62,7 @@ void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-typedef struct __attribute__((packed)) ADC_READINGS {
+typedef struct __attribute__((packed)) {
 	uint16_t Rate;
 	uint16_t Depth;
 	uint16_t Shape;
@@ -74,7 +74,6 @@ typedef struct __attribute__((packed)) ADC_READINGS {
 	uint16_t Vol;
 } Adc;
 
-volatile uint16_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
 
 /* USER CODE END 0 */
 
@@ -121,17 +120,29 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw, ADC_DMA_BUF_LENGTH);
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw,
+		  ADC_DMA_BUF_LENGTH) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2) != HAL_OK)
+  {
+	  Error_Handler();
+  }
 
 
   /* USER CODE END 2 */
@@ -141,12 +152,10 @@ int main(void)
   while (1)
   {
 
-	  HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
-	  uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
+
 
 	  // Toggle heartbeat LED
 	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
-
 
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event = EVENT_RELEASED;
@@ -154,6 +163,25 @@ int main(void)
 		  event = EVENT_PRESSED;
 	  }
 	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
+
+
+	  // Adjust Volume PWM Outputs based on Vol knob
+	  // TODO move to function
+	  // TODO can use __HAL_TIM_SET_COMPARE()
+	  TIM_OC_InitTypeDef sConfigOC = {0};
+	  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+	  //sConfigOC.Pulse = dma_wavetable[i];
+	  sConfigOC.Pulse = adc_raw->Vol;
+	  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+	  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+	  {
+		  Error_Handler();
+	  }
+	  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+	  {
+		  Error_Handler();
+	  }
 
 	  //uint16_t raw;
 	  //uint32_t rate = adc_raw.Rate;
@@ -212,8 +240,8 @@ void SystemClock_Config(void)
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV8;
   PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_HCLK;
-  PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_HCLK;
-  PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_HCLK;
+  PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_PLLCLK;
+  PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_PLLCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -228,12 +256,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-	uint32_t tick = HAL_GetTick();
-	uint16_t adc_raw = HAL_ADC_GetValue(&hadc1);
-	//HAL_ADC_Start(&hadc1);
+
 }
-
-
 
 
 /* Toggles LED if it's been longer than timout_ms since last toggle*/
@@ -244,6 +268,20 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 	if (tick - last_toggle_ms >= timeout_ms){
 		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
 		last_toggle_ms = tick;
+	}
+}
+
+void check_HAL_states(){
+	HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
+	if (adc_dma_state == HAL_DMA_STATE_RESET){
+		// DMA not properly initialized
+		Error_Handler();
+	}
+
+	uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
+	if (adc_dma_error != HAL_DMA_ERROR_NONE){
+		// Some sort of DMA error
+		Error_Handler();
 	}
 }
 

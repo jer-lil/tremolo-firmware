@@ -74,7 +74,6 @@ typedef struct __attribute__((packed)) {
 	uint16_t Vol;
 } Adc;
 
-volatile uint16_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
 
 /* USER CODE END 0 */
 
@@ -131,7 +130,19 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw, ADC_DMA_BUF_LENGTH);
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw,
+		  ADC_DMA_BUF_LENGTH) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2) != HAL_OK)
+  {
+	  Error_Handler();
+  }
 
 
   /* USER CODE END 2 */
@@ -141,12 +152,10 @@ int main(void)
   while (1)
   {
 
-	  HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
-	  uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
+
 
 	  // Toggle heartbeat LED
 	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
-
 
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event = EVENT_RELEASED;
@@ -155,10 +164,13 @@ int main(void)
 	  }
 	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
 
-	  //uint16_t raw;
-	  //uint32_t rate = adc_raw.Rate;
-	  //HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  //raw = HAL_ADC_GetValue(&hadc1);
+
+	  // Adjust Volume PWM Outputs based on Vol knob
+	  // TODO move to function
+	  //TIM3->CCR1 = adc_raw->Vol;
+	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, adc_raw->Vol);
+	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, adc_raw->Vol);
+	  //LL_TIM_OC_SetCompareCH1(htim2->Instance, vol);
 
 	  //HAL_Delay(100);
   }
@@ -228,12 +240,8 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
-	uint32_t tick = HAL_GetTick();
-	uint16_t adc_raw = HAL_ADC_GetValue(&hadc1);
-	//HAL_ADC_Start(&hadc1);
+
 }
-
-
 
 
 /* Toggles LED if it's been longer than timout_ms since last toggle*/
@@ -244,6 +252,20 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 	if (tick - last_toggle_ms >= timeout_ms){
 		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
 		last_toggle_ms = tick;
+	}
+}
+
+void check_HAL_states(){
+	HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
+	if (adc_dma_state == HAL_DMA_STATE_RESET){
+		// DMA not properly initialized
+		Error_Handler();
+	}
+
+	uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
+	if (adc_dma_error != HAL_DMA_ERROR_NONE){
+		// Some sort of DMA error
+		Error_Handler();
 	}
 }
 

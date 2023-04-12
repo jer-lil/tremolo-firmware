@@ -50,26 +50,16 @@ void sm_bypass_sw(StateBypassSw *state_switch, EventBypassSw event, StateEffect 
 }
 
 void sm_effect(StateEffect *state, EventEffect event){
-
-
 	switch (*state) {
 		case STATE_BYPASS:
 			if (event == EVENT_TOGGLE){
 				*state = STATE_EFFECT;
-				HAL_GPIO_WritePin(pDOUT_RLY_SET_GPIO_Port, pDOUT_RLY_SET_Pin,
-						GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin,
-						LED_PIN_RESET);
 
 			}
 			break;
 		case STATE_EFFECT:
 			if (event == EVENT_TOGGLE){
 				*state = STATE_BYPASS;
-				HAL_GPIO_WritePin(pDOUT_RLY_SET_GPIO_Port, pDOUT_RLY_SET_Pin,
-						GPIO_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin,
-						LED_PIN_SET);
 			}
 			break;
 

@@ -59,8 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define TIM2_PERIOD 1023
 #define TIM3_PERIOD 1023
-#define pDOUT_MUTE_11_Pin GPIO_PIN_13
-#define pDOUT_MUTE_11_GPIO_Port GPIOC
+#define pDOUT_MUTE_1_Pin GPIO_PIN_13
+#define pDOUT_MUTE_1_GPIO_Port GPIOC
 #define pDOUT_MUTE_2_Pin GPIO_PIN_14
 #define pDOUT_MUTE_2_GPIO_Port GPIOC
 #define pAIN_SUBDIV_Pin GPIO_PIN_0
@@ -85,8 +85,8 @@ void Error_Handler(void);
 #define pPWM_VOL_1_GPIO_Port GPIOA
 #define pPWM_1_Pin GPIO_PIN_6
 #define pPWM_1_GPIO_Port GPIOA
-#define pDIN_HARM_MODE_1_Pin GPIO_PIN_7
-#define pDIN_HARM_MODE_1_GPIO_Port GPIOA
+#define pDIN_PAN_MODE_1_Pin GPIO_PIN_7
+#define pDIN_PAN_MODE_1_GPIO_Port GPIOA
 #define pDIN_DIP_1_Pin GPIO_PIN_0
 #define pDIN_DIP_1_GPIO_Port GPIOB
 #define pDIN_DIP_2_Pin GPIO_PIN_1
@@ -137,8 +137,8 @@ void Error_Handler(void);
 #define pDOUT_LED2_R_GPIO_Port GPIOB
 #define pDIN_TAP_EXT_Pin GPIO_PIN_8
 #define pDIN_TAP_EXT_GPIO_Port GPIOB
-#define pDIN_HARM_MODE_1B9_Pin GPIO_PIN_9
-#define pDIN_HARM_MODE_1B9_GPIO_Port GPIOB
+#define pDIN_HARM_MODE_1_Pin GPIO_PIN_9
+#define pDIN_HARM_MODE_1_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 #define TIM2_PERIOD 1023
@@ -154,9 +154,6 @@ void Error_Handler(void);
 #define LED_PIN_SET GPIO_PIN_RESET
 #define LED_PIN_RESET GPIO_PIN_SET
 
-/* Temp remapping of bypass switch pin+port to LED */
-#define pDOUT_BYP_Pin pDOUT_LED2_B_Pin
-#define pDOUT_BYP_GPIO_Port pDOUT_LED2_B_GPIO_Port
 
 /* USER CODE END Private defines */
 

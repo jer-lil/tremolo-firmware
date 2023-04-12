@@ -97,6 +97,7 @@ int main(void)
   /* Iniitalize state machines */
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
+  StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
 
   Adc* adc_raw;
 
@@ -119,8 +120,8 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
   MX_DMA_Init();
+  MX_GPIO_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -158,11 +159,18 @@ int main(void)
 	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
 
 	  // Check for bypass switch state and run state machine
-	  EventBypassSw event = EVENT_RELEASED;
+	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
 	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
-		  event = EVENT_PRESSED;
+		  event_bypass_sw = EVENT_PRESSED;
 	  }
-	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
+	  sm_bypass_sw(&state_bypass_sw, event_bypass_sw, &state_effect);
+
+	  EventRelayMute event_relay_mute = EVENT_BYPASS;
+	  if (state_effect == STATE_EFFECT){
+		  event_relay_mute = EVENT_EFFECT;
+	  }
+
+	  sm_relay_mute(&state_relay_mute, event_relay_mute);
 
 
 	  // Adjust Volume PWM Outputs based on Vol knob

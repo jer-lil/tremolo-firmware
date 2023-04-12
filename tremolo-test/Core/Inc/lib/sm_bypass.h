@@ -29,10 +29,22 @@ typedef enum {
 	EVENT_TOGGLE,
 } EventEffect;
 
+typedef enum {
+	STATE_EFFECT_UNMUTE,
+	STATE_EFFECT_MUTE,
+	STATE_BYPASS_UNMUTE,
+	STATE_BYPASS_MUTE,
+} StateRelayMute;
+
+typedef enum {
+	EVENT_EFFECT,
+	EVENT_BYPASS
+} EventRelayMute;
+
 
 void sm_bypass_sw(StateBypassSw*, EventBypassSw, StateEffect*);
 void sm_effect(StateEffect*, EventEffect);
-
+void sm_relay_mute(StateRelayMute*, EventRelayMute);
 
 
 #endif /* INC_LIB_SM_BYPASS_H_ */

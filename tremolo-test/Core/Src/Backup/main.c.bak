@@ -97,6 +97,7 @@ int main(void)
   /* Iniitalize state machines */
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
+  StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
 
   Adc* adc_raw;
 
@@ -158,35 +159,26 @@ int main(void)
 	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
 
 	  // Check for bypass switch state and run state machine
-	  EventBypassSw event = EVENT_RELEASED;
+	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
 	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
-		  event = EVENT_PRESSED;
+		  event_bypass_sw = EVENT_PRESSED;
 	  }
-	  sm_bypass_sw(&state_bypass_sw, event, &state_effect);
+	  sm_bypass_sw(&state_bypass_sw, event_bypass_sw, &state_effect);
+
+	  EventRelayMute event_relay_mute = EVENT_BYPASS;
+	  if (state_effect == STATE_EFFECT){
+		  event_relay_mute = EVENT_EFFECT;
+	  }
+
+	  sm_relay_mute(&state_relay_mute, event_relay_mute);
 
 
 	  // Adjust Volume PWM Outputs based on Vol knob
 	  // TODO move to function
-	  // TODO can use __HAL_TIM_SET_COMPARE()
-	  TIM_OC_InitTypeDef sConfigOC = {0};
-	  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-	  //sConfigOC.Pulse = dma_wavetable[i];
-	  sConfigOC.Pulse = adc_raw->Vol;
-	  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-	  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-	  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-	  {
-		  Error_Handler();
-	  }
-	  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-	  {
-		  Error_Handler();
-	  }
-
-	  //uint16_t raw;
-	  //uint32_t rate = adc_raw.Rate;
-	  //HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-	  //raw = HAL_ADC_GetValue(&hadc1);
+	  //TIM3->CCR1 = adc_raw->Vol;
+	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, adc_raw->Vol);
+	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, adc_raw->Vol);
+	  //LL_TIM_OC_SetCompareCH1(htim2->Instance, vol);
 
 	  //HAL_Delay(100);
   }

@@ -155,6 +155,9 @@ void Error_Handler(void);
 #define LED_PIN_SET GPIO_PIN_RESET
 #define LED_PIN_RESET GPIO_PIN_SET
 
+// for fixed point math
+#define SHIFT_AMOUNT 16;
+
 
 /* USER CODE END Private defines */
 

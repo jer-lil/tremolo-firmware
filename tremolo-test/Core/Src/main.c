@@ -276,23 +276,29 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 }
 
 void generate_triangle_wave(uint16_t depth){
-	uint16_t max = WAVETABLE_DEPTH;
-	//uint16_t min = WAVETABLE_DEPTH - depth;
-	uint16_t min = 0;
-	//uint16_t step = ((max-min)+1) / 512;
-	uint16_t step = 2;
 
-	dma_wavetable[0] = min;
+	uint32_t f_depth = depth << SHIFT_AMOUNT;
+	uint32_t midpoint = WAVETABLE_WIDTH >> 1;
+	uint32_t f_max = WAVETABLE_DEPTH << SHIFT_AMOUNT;
+	uint32_t f_min = (WAVETABLE_DEPTH - depth) << SHIFT_AMOUNT;
+	uint32_t f_step = f_depth / midpoint;
 
-	for (int i=1; i<WAVETABLE_WIDTH; i++){
+	uint32_t f_val = f_min;
+	uint32_t val;
+
+	for (int i=0; i<WAVETABLE_WIDTH; i++){
 		if (i < WAVETABLE_WIDTH>>1){
-			dma_wavetable[i] = dma_wavetable[i-1]+step;
+			val = f_val >> SHIFT_AMOUNT;
+			dma_wavetable[i] = val;
+			f_val = f_val+f_step;
 		}
 		else if (i == (WAVETABLE_WIDTH>>1)){
-			dma_wavetable[i] = max;
+			dma_wavetable[i] = f_max >> SHIFT_AMOUNT;
 		}
 		else{
-			dma_wavetable[i] = dma_wavetable[i-1]-step;
+			val = f_val >> SHIFT_AMOUNT;
+			dma_wavetable[i] = val;
+			f_val = f_val-f_step;
 		}
 	}
 }

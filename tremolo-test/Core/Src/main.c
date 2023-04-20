@@ -56,6 +56,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
+void generate_triangle_wave(uint16_t);
 
 /* USER CODE END PFP */
 
@@ -74,6 +75,9 @@ typedef struct __attribute__((packed)) {
 	uint16_t Vol;
 } Adc;
 
+
+uint16_t dma_wavetable[WAVETABLE_WIDTH] = {0};
+uint16_t new_wavetable[WAVETABLE_WIDTH] = {0};
 
 /* USER CODE END 0 */
 
@@ -127,7 +131,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
-  MX_TIM8_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -144,6 +148,11 @@ int main(void)
   {
 	  Error_Handler();
   }
+
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_OC_Start(&htim16, TIM_CHANNEL_1);
+  HAL_DMA_Start_IT(&hdma_tim16_ch1_up, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+  __HAL_TIM_ENABLE_DMA(&htim16, TIM_DMA_CC1);
 
 
   /* USER CODE END 2 */
@@ -172,13 +181,16 @@ int main(void)
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute);
 
-
 	  // Adjust Volume PWM Outputs based on Vol knob
 	  // TODO move to function
 	  //TIM3->CCR1 = adc_raw->Vol;
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, adc_raw->Vol);
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, adc_raw->Vol);
 	  //LL_TIM_OC_SetCompareCH1(htim2->Instance, vol);
+
+	  // Generate new triangle wave based on latest depth input
+	  // TODO accommodate different shapes
+	  generate_triangle_wave(adc_raw->Depth);
 
 	  //HAL_Delay(100);
   }
@@ -226,12 +238,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM8
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM16
                               |RCC_PERIPHCLK_ADC12|RCC_PERIPHCLK_TIM2
                               |RCC_PERIPHCLK_TIM34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV8;
-  PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_HCLK;
+  PeriphClkInit.Tim16ClockSelection = RCC_TIM16CLK_HCLK;
   PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_PLLCLK;
   PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_PLLCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -260,6 +272,28 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 	if (tick - last_toggle_ms >= timeout_ms){
 		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
 		last_toggle_ms = tick;
+	}
+}
+
+void generate_triangle_wave(uint16_t depth){
+	uint16_t max = WAVETABLE_DEPTH;
+	//uint16_t min = WAVETABLE_DEPTH - depth;
+	uint16_t min = 0;
+	//uint16_t step = ((max-min)+1) / 512;
+	uint16_t step = 2;
+
+	dma_wavetable[0] = min;
+
+	for (int i=1; i<WAVETABLE_WIDTH; i++){
+		if (i < WAVETABLE_WIDTH>>1){
+			dma_wavetable[i] = dma_wavetable[i-1]+step;
+		}
+		else if (i == (WAVETABLE_WIDTH>>1)){
+			dma_wavetable[i] = max;
+		}
+		else{
+			dma_wavetable[i] = dma_wavetable[i-1]-step;
+		}
 	}
 }
 

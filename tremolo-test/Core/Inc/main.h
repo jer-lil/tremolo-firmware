@@ -143,11 +143,12 @@ void Error_Handler(void);
 
 #define TIM2_PERIOD 1023
 #define TIM3_PERIOD 1023
+#define WAVETABLE_WIDTH 1024
+#define WAVETABLE_DEPTH 1023
 
-/* I do not know why this is 11, it just works */
 #define ADC_DMA_BUF_LENGTH 9
 
-/* Toggle heartbead LED every 500ms */
+/* Toggle heartbeat LED every 500ms */
 #define HEARTBEAT_MS 500
 
 /* Map LEDs as inverted GPIO */

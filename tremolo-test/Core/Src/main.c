@@ -56,7 +56,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
-void generate_triangle_wave(uint16_t);
+void generate_triangle_wave(uint32_t, uint32_t);
 
 /* USER CODE END PFP */
 
@@ -190,7 +190,7 @@ int main(void)
 
 	  // Generate new triangle wave based on latest depth input
 	  // TODO accommodate different shapes
-	  generate_triangle_wave(adc_raw->Depth);
+	  generate_triangle_wave((uint32_t)adc_raw->Depth, (uint32_t)adc_raw->Offset);
 
 	  //HAL_Delay(100);
   }
@@ -275,30 +275,30 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 	}
 }
 
-void generate_triangle_wave(uint16_t depth){
+void generate_triangle_wave(uint32_t depth, uint32_t offset){
 
 	uint32_t f_depth = depth << SHIFT_AMOUNT;
-	uint32_t midpoint = WAVETABLE_WIDTH >> 1;
 	uint32_t f_max = WAVETABLE_DEPTH << SHIFT_AMOUNT;
 	uint32_t f_min = (WAVETABLE_DEPTH - depth) << SHIFT_AMOUNT;
-	uint32_t f_step = f_depth / midpoint;
-
+	// TODO don't divide by zero
+	uint32_t f_step_up = f_depth / offset;
+	uint32_t f_step_down = f_depth / (WAVETABLE_WIDTH-offset);
 	uint32_t f_val = f_min;
 	uint32_t val;
 
 	for (int i=0; i<WAVETABLE_WIDTH; i++){
-		if (i < WAVETABLE_WIDTH>>1){
+		if (i < offset){
 			val = f_val >> SHIFT_AMOUNT;
 			dma_wavetable[i] = val;
-			f_val = f_val+f_step;
+			f_val = f_val+f_step_up;
 		}
-		else if (i == (WAVETABLE_WIDTH>>1)){
+		else if (i == offset){
 			dma_wavetable[i] = f_max >> SHIFT_AMOUNT;
 		}
 		else{
 			val = f_val >> SHIFT_AMOUNT;
 			dma_wavetable[i] = val;
-			f_val = f_val-f_step;
+			f_val = f_val-f_step_down;
 		}
 	}
 }

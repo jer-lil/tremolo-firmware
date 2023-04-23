@@ -38,7 +38,9 @@ extern TIM_HandleTypeDef htim3;
 
 extern TIM_HandleTypeDef htim4;
 
-extern TIM_HandleTypeDef htim8;
+extern TIM_HandleTypeDef htim16;
+
+extern DMA_HandleTypeDef hdma_tim16_ch1_up;
 
 /* USER CODE BEGIN Private defines */
 
@@ -47,7 +49,7 @@ extern TIM_HandleTypeDef htim8;
 void MX_TIM2_Init(void);
 void MX_TIM3_Init(void);
 void MX_TIM4_Init(void);
-void MX_TIM8_Init(void);
+void MX_TIM16_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 

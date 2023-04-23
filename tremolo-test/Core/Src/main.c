@@ -56,7 +56,9 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
 void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
-void generate_triangle_wave(uint32_t, uint32_t);
+void generate_triangle_wave_fixedpoint(uint32_t, uint32_t);
+void generate_triangle_wave_floatingpoint(uint32_t, uint32_t);
+
 
 /* USER CODE END PFP */
 
@@ -120,7 +122,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  //TODO make DMA_Init happen before TIM init even after code generation
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -131,10 +133,10 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
-  MX_TIM16_Init();
+  MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
-
+  // TODO clean up and move to function
   if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_raw,
 		  ADC_DMA_BUF_LENGTH) != HAL_OK)
   {
@@ -149,10 +151,50 @@ int main(void)
 	  Error_Handler();
   }
 
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_OC_Start(&htim16, TIM_CHANNEL_1);
-  HAL_DMA_Start_IT(&hdma_tim16_ch1_up, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-  __HAL_TIM_ENABLE_DMA(&htim16, TIM_DMA_CC1);
+  // TIM8 CH1-4 updates the capture/compare regs of TIM3 CH1-4 for PWM output
+  if (HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  //TIM3 CH1-4 are used for treble/bass channels of both stereo channels
+  if (HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  if (HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+  // First just setting all 4 channels synced to same wavetable
+  // TODO figure out best way to have different phases per channel
+  HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
+  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
+  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
+  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
 
 
   /* USER CODE END 2 */
@@ -190,7 +232,9 @@ int main(void)
 
 	  // Generate new triangle wave based on latest depth input
 	  // TODO accommodate different shapes
-	  generate_triangle_wave((uint32_t)adc_raw->Depth, (uint32_t)adc_raw->Offset);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, GPIO_PIN_SET);
+	  generate_triangle_wave_fixedpoint((uint32_t)adc_raw->Depth, (uint32_t)adc_raw->Offset);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, GPIO_PIN_RESET);
 
 	  //HAL_Delay(100);
   }
@@ -238,12 +282,12 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM16
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_TIM8
                               |RCC_PERIPHCLK_ADC12|RCC_PERIPHCLK_TIM2
                               |RCC_PERIPHCLK_TIM34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV8;
-  PeriphClkInit.Tim16ClockSelection = RCC_TIM16CLK_HCLK;
+  PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_HCLK;
   PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_PLLCLK;
   PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_PLLCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -275,7 +319,9 @@ void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_P
 	}
 }
 
-void generate_triangle_wave(uint32_t depth, uint32_t offset){
+
+// TODO move to library
+void generate_triangle_wave_fixedpoint(uint32_t depth, uint32_t offset){
 
 	uint32_t f_depth = depth << SHIFT_AMOUNT;
 	uint32_t f_max = WAVETABLE_DEPTH << SHIFT_AMOUNT;
@@ -284,23 +330,58 @@ void generate_triangle_wave(uint32_t depth, uint32_t offset){
 	uint32_t f_step_up = f_depth / offset;
 	uint32_t f_step_down = f_depth / (WAVETABLE_WIDTH-offset);
 	uint32_t f_val = f_min;
-	uint32_t val;
+	//uint32_t val;
 
-	for (int i=0; i<WAVETABLE_WIDTH; i++){
-		if (i < offset){
-			val = f_val >> SHIFT_AMOUNT;
-			dma_wavetable[i] = val;
-			f_val = f_val+f_step_up;
-		}
-		else if (i == offset){
-			dma_wavetable[i] = f_max >> SHIFT_AMOUNT;
-		}
-		else{
-			val = f_val >> SHIFT_AMOUNT;
-			dma_wavetable[i] = val;
-			f_val = f_val-f_step_down;
-		}
+	for (int i=0; i<offset; i++){
+		//val = f_val >> SHIFT_AMOUNT;
+		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_SET);
+		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_SET);
+		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
+		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_RESET);
+		f_val = f_val+f_step_up;
+		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_RESET);
 	}
+
+	dma_wavetable[offset] = f_max >> SHIFT_AMOUNT;
+
+	for (int i=offset+1; i<WAVETABLE_WIDTH; i++){
+		//val = f_val >> SHIFT_AMOUNT;
+		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
+		f_val = f_val-f_step_down;
+	}
+	return;
+}
+
+void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset){
+
+	float fl_depth = (float)depth;
+	float fl_offset = (float) offset;
+	float fl_max = (float)WAVETABLE_DEPTH;
+	float fl_min = (float)(WAVETABLE_DEPTH - depth);
+	// TODO don't divide by zero
+	float fl_step_up = fl_depth / fl_offset;
+	float fl_step_down = fl_depth / ((float)WAVETABLE_WIDTH-fl_offset);
+	float fl_val = fl_min;
+	//uint32_t val;
+
+	for (int i=0; i<offset; i++){
+		//val = f_val >> SHIFT_AMOUNT;
+		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_SET);
+		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_SET);
+		dma_wavetable[i] = (uint16_t)fl_val;
+		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_RESET);
+		fl_val = fl_val+fl_step_up;
+		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_RESET);
+	}
+
+	dma_wavetable[offset] = (uint16_t)fl_max;
+
+	for (int i=offset+1; i<WAVETABLE_WIDTH; i++){
+		//val = f_val >> SHIFT_AMOUNT;
+		dma_wavetable[i] = (uint16_t)fl_val;
+		fl_val = fl_val-fl_step_down;
+	}
+	return;
 }
 
 void check_HAL_states(){
@@ -328,8 +409,25 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+
+  HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin, LED_PIN_SET);
+
   while (1)
   {
+	  HAL_Delay(250);
+
+	  HAL_GPIO_TogglePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
+	  HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
+	  HAL_GPIO_TogglePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin);
+	  HAL_GPIO_TogglePin(pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin);
+	  HAL_GPIO_TogglePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
+	  HAL_GPIO_TogglePin(pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin);
+
   }
   /* USER CODE END Error_Handler_Debug */
 }

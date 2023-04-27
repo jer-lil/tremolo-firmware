@@ -59,6 +59,10 @@ void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
 void generate_triangle_wave_fixedpoint(uint32_t, uint32_t);
 void generate_triangle_wave_floatingpoint(uint32_t, uint32_t);
 
+void set_lfo_polarity();
+void set_volume(uint16_t);
+void set_rate(uint16_t);
+
 
 /* USER CODE END PFP */
 
@@ -104,6 +108,8 @@ int main(void)
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
+  //StatePhase state_phase = STATE_MONO;
+  //StateHarm state_harm = STATE_STANDARD;
 
   Adc* adc_raw;
 
@@ -203,7 +209,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+	  HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
 
 
 	  // Toggle heartbeat LED
@@ -223,20 +229,11 @@ int main(void)
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute);
 
-	  // Adjust Volume PWM Outputs based on Vol knob
-	  // TODO move to function
-	  //TIM3->CCR1 = adc_raw->Vol;
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, adc_raw->Vol);
-	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, adc_raw->Vol);
-	  //LL_TIM_OC_SetCompareCH1(htim2->Instance, vol);
-
 	  // Generate new triangle wave based on latest depth input
-	  // TODO accommodate different shapes
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, GPIO_PIN_SET);
 	  generate_triangle_wave_fixedpoint((uint32_t)adc_raw->Depth, (uint32_t)adc_raw->Offset);
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, GPIO_PIN_RESET);
 
-	  //HAL_Delay(100);
+	  set_rate(adc_raw->Rate);
+
   }
     /* USER CODE END WHILE */
 
@@ -275,7 +272,7 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
@@ -287,7 +284,7 @@ void SystemClock_Config(void)
                               |RCC_PERIPHCLK_TIM34;
   PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV8;
-  PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_HCLK;
+  PeriphClkInit.Tim8ClockSelection = RCC_TIM8CLK_PLLCLK;
   PeriphClkInit.Tim2ClockSelection = RCC_TIM2CLK_PLLCLK;
   PeriphClkInit.Tim34ClockSelection = RCC_TIM34CLK_PLLCLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -305,6 +302,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 
+}
+
+void set_lfo_polarity(){
+
+}
+void set_volume(uint16_t vol){
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, vol);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, vol);
+}
+
+// TODO implement with tap and external sync
+// TODO add subdivision
+void set_rate(uint16_t rate_knob){
+	float fl_rate = (float)(ADC_RESOLUTION - rate_knob);
+	float fl_rate_arr = fl_rate * (RATE_ARR_MAX - RATE_ARR_MIN) / ADC_RESOLUTION;
+	uint16_t rate_arr = (uint16_t)fl_rate_arr;
+	//uint16_t rate_arr = 1+rate_knob;
+	//__HAL_TIM_SET_AUTORELOAD(&htim8, rate_arr);
+	__HAL_TIM_SET_PRESCALER(&htim8, rate_arr);
 }
 
 
@@ -327,7 +343,7 @@ void generate_triangle_wave_fixedpoint(uint32_t depth, uint32_t offset){
 	uint32_t f_max = WAVETABLE_DEPTH << SHIFT_AMOUNT;
 	uint32_t f_min = (WAVETABLE_DEPTH - depth) << SHIFT_AMOUNT;
 	// TODO don't divide by zero
-	uint32_t f_step_up = f_depth / offset;
+	uint32_t f_step_up = f_depth / offset++;
 	uint32_t f_step_down = f_depth / (WAVETABLE_WIDTH-offset);
 	uint32_t f_val = f_min;
 	//uint32_t val;

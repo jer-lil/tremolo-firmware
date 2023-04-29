@@ -151,7 +151,7 @@ void Error_Handler(void);
 #define RATE_ARR_MIN 0
 #define RATE_ARR_MAX 100
 
-#define VOL_MAP_MAX 900
+#define VOL_MAP_MAX 1023
 #define VOL_MAP_MIN 100
 
 #define ADC_DMA_BUF_LENGTH 9

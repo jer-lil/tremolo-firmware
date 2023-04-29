@@ -149,7 +149,10 @@ void Error_Handler(void);
 #define ADC_RESOLUTION 1023
 // TODO define these programmatically based on min/max LFO rates
 #define RATE_ARR_MIN 0
-#define RATE_ARR_MAX 1023
+#define RATE_ARR_MAX 100
+
+#define VOL_MAP_MAX 1023
+#define VOL_MAP_MIN 100
 
 #define ADC_DMA_BUF_LENGTH 9
 

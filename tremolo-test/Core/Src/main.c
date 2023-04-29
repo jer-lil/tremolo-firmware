@@ -46,6 +46,20 @@ typedef struct {
 	uint32_t *Vol;
 } Adc;
 
+typedef enum {
+	STATE_STD,
+	STATE_HARM,
+	STATE_PAN,
+} StatePhase;
+
+typedef enum {
+	EVENT_STD,
+	EVENT_HARM,
+	EVENT_PAN,
+} EventPhase;
+
+
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -75,6 +89,8 @@ void init_adc_channels(Adc*, uint32_t[]);
 void set_lfo_polarity();
 void set_volume(uint16_t);
 void set_rate(uint16_t);
+void set_phase(StatePhase*);
+void sm_phase(StatePhase*, EventPhase);
 
 
 /* USER CODE END PFP */
@@ -110,6 +126,7 @@ int main(void)
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
+  StatePhase state_phase = STATE_STD;
   //StatePhase state_phase = STATE_MONO;
   //StateHarm state_harm = STATE_STANDARD;
 
@@ -210,10 +227,11 @@ int main(void)
 	  // Set parameters based on control inputs
 	  set_rate(*adc_raw.Rate);
 	  set_volume(*adc_raw.Vol);
+	  set_phase(&state_phase);
 
 	  /* XXX: DEBUGGING CODE START */
 	  // Toggle red LED 2 to measure loop time
-	  HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
+	  //HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
 
 	  /* XXX: DEBUGGING CODE END */
 
@@ -291,9 +309,116 @@ void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 	adc->Vol = &adc_buffer[8];
 }
 
-void set_lfo_polarity(){
-
+void set_phase(StatePhase* state){
+	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
+			  pDIN_HARM_MODE_1_Pin);
+	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
+			  pDIN_HARM_MODE_2_Pin);
+	  if (!ph_left){sm_phase(state, EVENT_PAN);}
+	  else if (!ph_right){sm_phase(state, EVENT_HARM);}
+	  else {sm_phase(state, EVENT_STD);}
 }
+
+void sm_phase(StatePhase* state, EventPhase event){
+	switch (*state) {
+		case STATE_STD:
+			if (event == EVENT_HARM){
+				*state = STATE_HARM;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+			}
+			else if (event == EVENT_PAN){
+				*state = STATE_PAN;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
+			}
+
+			break;
+		case STATE_HARM:
+			if (event == EVENT_STD){
+				*state = STATE_STD;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+			}
+			else if (event == EVENT_PAN){
+				*state = STATE_PAN;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
+			}
+			break;
+		case STATE_PAN:
+			if (event == EVENT_STD){
+				*state = STATE_STD;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+			}
+			else if (event == EVENT_HARM){
+				*state = STATE_HARM;
+				HAL_DMA_Abort(&hdma_tim8_ch1);
+				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch2);
+				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch3_up);
+				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
+				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
+				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+			}
+			break;
+
+		default:
+
+			break;
+	}
+}
+
 
 void set_volume(uint16_t vol){
 	float fl_vol = (float)(ADC_RESOLUTION - vol);

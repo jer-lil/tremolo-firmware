@@ -3,6 +3,8 @@
  *
  *  Created on: Mar 28, 2023
  *      Author: jeremiah
+ *
+ *  TODO maybe can simplify by making a struct that contains states/events
  */
 
 #include "lib/sm_bypass.h"
@@ -69,7 +71,9 @@ void sm_effect(StateEffect *state, EventEffect event){
 	}
 }
 
-void sm_relay_mute(StateRelayMute *state, EventRelayMute event) {
+void sm_relay_mute(StateRelayMute *state, EventRelayMute event,
+		LED* LED_bypass)
+{
 	static uint32_t mute_start = 0;
 	const uint32_t mute_time_ms = 10;
 
@@ -78,32 +82,17 @@ void sm_relay_mute(StateRelayMute *state, EventRelayMute event) {
 			if (event == EVENT_EFFECT){
 				*state = STATE_BYPASS_MUTE;
 				mute_start = HAL_GetTick();
-				HAL_GPIO_WritePin(pDOUT_MUTE_1_GPIO_Port, pDOUT_MUTE_1_Pin,
-					GPIO_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_MUTE_2_GPIO_Port, pDOUT_MUTE_2_Pin,
-					GPIO_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
-					LED_PIN_SET);
+				set_LED_state(LED_bypass, ON);
 			}
 			break;
 		case STATE_BYPASS_MUTE:
 			if (HAL_GetTick() - mute_start >= mute_time_ms){
 				if (event == EVENT_BYPASS){
 					*state = STATE_BYPASS_UNMUTE;
-					HAL_GPIO_WritePin(pDOUT_MUTE_1_GPIO_Port, pDOUT_MUTE_1_Pin,
-						GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(pDOUT_MUTE_2_GPIO_Port, pDOUT_MUTE_2_Pin,
-						GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
-						LED_PIN_RESET);
 				}
 				else {
 					*state = STATE_EFFECT_MUTE;
 					mute_start = HAL_GetTick();
-					HAL_GPIO_WritePin(pDOUT_RLY_SET_GPIO_Port, pDOUT_RLY_SET_Pin,
-						GPIO_PIN_SET);
-					HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin,
-						LED_PIN_SET);
 				}
 			}
 			break;
@@ -112,19 +101,9 @@ void sm_relay_mute(StateRelayMute *state, EventRelayMute event) {
 				if (event == EVENT_BYPASS){
 					*state = STATE_BYPASS_MUTE;
 					mute_start = HAL_GetTick();
-					HAL_GPIO_WritePin(pDOUT_RLY_SET_GPIO_Port, pDOUT_RLY_SET_Pin,
-						GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin,
-						LED_PIN_RESET);
 				}
 				else {
 					*state = STATE_EFFECT_UNMUTE;
-					HAL_GPIO_WritePin(pDOUT_MUTE_1_GPIO_Port, pDOUT_MUTE_1_Pin,
-						GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(pDOUT_MUTE_2_GPIO_Port, pDOUT_MUTE_2_Pin,
-						GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
-						LED_PIN_RESET);
 				}
 			}
 			break;
@@ -132,12 +111,7 @@ void sm_relay_mute(StateRelayMute *state, EventRelayMute event) {
 			if (event == EVENT_BYPASS){
 				*state = STATE_EFFECT_MUTE;
 				mute_start = HAL_GetTick();
-				HAL_GPIO_WritePin(pDOUT_MUTE_1_GPIO_Port, pDOUT_MUTE_1_Pin,
-					GPIO_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_MUTE_2_GPIO_Port, pDOUT_MUTE_2_Pin,
-					GPIO_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
-					LED_PIN_SET);
+				set_LED_state(LED_bypass, OFF);
 			}
 			break;
 		default:

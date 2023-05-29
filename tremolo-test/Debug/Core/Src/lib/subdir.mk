@@ -5,12 +5,15 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Core/Src/lib/led.c \
 ../Core/Src/lib/sm_bypass.c 
 
 OBJS += \
+./Core/Src/lib/led.o \
 ./Core/Src/lib/sm_bypass.o 
 
 C_DEPS += \
+./Core/Src/lib/led.d \
 ./Core/Src/lib/sm_bypass.d 
 
 
@@ -21,7 +24,7 @@ Core/Src/lib/%.o Core/Src/lib/%.su: ../Core/Src/lib/%.c Core/Src/lib/subdir.mk
 clean: clean-Core-2f-Src-2f-lib
 
 clean-Core-2f-Src-2f-lib:
-	-$(RM) ./Core/Src/lib/sm_bypass.d ./Core/Src/lib/sm_bypass.o ./Core/Src/lib/sm_bypass.su
+	-$(RM) ./Core/Src/lib/led.d ./Core/Src/lib/led.o ./Core/Src/lib/led.su ./Core/Src/lib/sm_bypass.d ./Core/Src/lib/sm_bypass.o ./Core/Src/lib/sm_bypass.su
 
 .PHONY: clean-Core-2f-Src-2f-lib
 

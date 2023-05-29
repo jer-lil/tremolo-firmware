@@ -91,12 +91,7 @@ void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
 
-	HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
-	HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
-	HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
-	HAL_GPIO_WritePin(pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin, LED_PIN_SET);
-	HAL_GPIO_WritePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin, LED_PIN_SET);
-	HAL_GPIO_WritePin(pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin, LED_PIN_SET);
+	Error_Handler();
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
@@ -249,8 +244,6 @@ void TIM4_IRQHandler(void)
   /* USER CODE END TIM4_IRQn 0 */
   HAL_TIM_IRQHandler(&htim4);
   /* USER CODE BEGIN TIM4_IRQn 1 */
-
-  HAL_TIM_IC_CaptureCallback(&htim4);
 
   /* USER CODE END TIM4_IRQn 1 */
 }

@@ -1,6 +1,6 @@
 Core/Src/lib/sm_bypass.o: ../Core/Src/lib/sm_bypass.c \
- ../Core/Inc/lib/sm_bypass.h \
- ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal.h \
+ ../Core/Inc/lib/sm_bypass.h ../Core/Inc/lib/led.h ../Core/Inc/gpio.h \
+ ../Core/Inc/main.h ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal.h \
  ../Core/Inc/stm32f3xx_hal_conf.h \
  ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal_rcc.h \
  ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal_def.h \
@@ -34,6 +34,9 @@ Core/Src/lib/sm_bypass.o: ../Core/Src/lib/sm_bypass.c \
  ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal_uart_ex.h \
  ../Core/Inc/main.h
 ../Core/Inc/lib/sm_bypass.h:
+../Core/Inc/lib/led.h:
+../Core/Inc/gpio.h:
+../Core/Inc/main.h:
 ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal.h:
 ../Core/Inc/stm32f3xx_hal_conf.h:
 ../Drivers/STM32F3xx_HAL_Driver/Inc/stm32f3xx_hal_rcc.h:

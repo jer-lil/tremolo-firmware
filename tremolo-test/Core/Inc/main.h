@@ -145,10 +145,10 @@ void Error_Handler(void);
 #define TIM3_PERIOD 1023
 #define WAVETABLE_WIDTH 1024
 #define WAVETABLE_DEPTH 1023
-
 #define ADC_RESOLUTION 1023
+
 // TODO define these programmatically based on min/max LFO rates
-#define RATE_ARR_MIN 0
+#define RATE_ARR_MIN 32
 #define RATE_ARR_MAX 100
 
 #define VOL_MAP_MAX 1023
@@ -158,10 +158,6 @@ void Error_Handler(void);
 
 /* Toggle heartbeat LED every 500ms */
 #define HEARTBEAT_MS 500
-
-/* Map LEDs as inverted GPIO */
-#define LED_PIN_SET GPIO_PIN_RESET
-#define LED_PIN_RESET GPIO_PIN_SET
 
 // for fixed point math
 #define SHIFT_AMOUNT 16;

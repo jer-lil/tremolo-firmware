@@ -8,6 +8,8 @@
 #ifndef INC_LIB_SM_BYPASS_H_
 #define INC_LIB_SM_BYPASS_H_
 
+#include "lib/led.h"
+
 typedef enum {
 	STATE_IDLE,
 	STATE_WAIT_RELEASE,
@@ -44,7 +46,6 @@ typedef enum {
 
 void sm_bypass_sw(StateBypassSw*, EventBypassSw, StateEffect*);
 void sm_effect(StateEffect*, EventEffect);
-void sm_relay_mute(StateRelayMute*, EventRelayMute);
-
+void sm_relay_mute(StateRelayMute*, EventRelayMute, LED*);
 
 #endif /* INC_LIB_SM_BYPASS_H_ */

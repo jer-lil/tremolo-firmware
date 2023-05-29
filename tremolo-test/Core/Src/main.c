@@ -28,6 +28,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "lib/sm_bypass.h"
+#include "lib/led.h"
 
 /* USER CODE END Includes */
 
@@ -75,6 +76,9 @@ typedef enum {
 
 /* USER CODE BEGIN PV */
 
+LED LED_bypass;
+LED LED_tap;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -86,11 +90,15 @@ void generate_triangle_wave_fixedpoint(uint32_t, uint32_t);
 void generate_triangle_wave_floatingpoint(uint32_t, uint32_t);
 
 void init_adc_channels(Adc*, uint32_t[]);
+void init_LEDs(LED*, LED*);
 void set_lfo_polarity();
 void set_volume(uint16_t);
 void set_rate(uint16_t);
-void set_phase(StatePhase*);
-void sm_phase(StatePhase*, EventPhase);
+void set_phase(StatePhase*, LED*);
+void sm_phase(StatePhase*, EventPhase, LED*);
+
+void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
+void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 
 
 /* USER CODE END PFP */
@@ -130,7 +138,10 @@ int main(void)
   //StatePhase state_phase = STATE_MONO;
   //StateHarm state_harm = STATE_STANDARD;
 
+  init_LEDs(&LED_bypass, &LED_tap);
+
   Adc adc_raw;
+  init_adc_channels(&adc_raw, adc_array);
 
   /* USER CODE END Init */
 
@@ -147,13 +158,11 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
-
-  // Map named Adc members to DMA buffer array
-  init_adc_channels(&adc_raw, adc_array);
 
   // TODO clean up and move to function
   if (HAL_ADC_Start_DMA(&hadc1, adc_array,
@@ -169,14 +178,7 @@ int main(void)
 	  Error_Handler();
   }
 
-  // Start output compare for waveform timers (to update the wavetables)
-  if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
+
 
   // Start PWM output for PWM timers (the ones that actually output the LFOs)
   if ((HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) |
@@ -187,16 +189,52 @@ int main(void)
 	  Error_Handler();
   }
 
+  // Link Transfer complete callback to DMA handle:
+  hdma_tim8_ch1.XferCpltCallback = My_DMA_XferCpltCallback;
+  hdma_tim8_ch1.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+  hdma_tim8_ch2.XferCpltCallback = My_DMA_XferCpltCallback;
+  hdma_tim8_ch2.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+  hdma_tim8_ch3_up.XferCpltCallback = My_DMA_XferCpltCallback;
+  hdma_tim8_ch3_up.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+  hdma_tim8_ch4_trig_com.XferCpltCallback = My_DMA_XferCpltCallback;
+  hdma_tim8_ch4_trig_com.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+
   // First just setting all 4 channels synced to same wavetable
   // TODO figure out best way to have different phases per channel
-  HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
   __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
   __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
   __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
   __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
+  HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+
+  // Start output compare for waveform timers (to update the wavetables)
+  if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
+	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
+	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
+	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
+  {
+	  Error_Handler();
+  }
+
+/*
+  // Enable transfer complete interrupts
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_TC);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_TC);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_TC);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_TC);
+  // Enable transfer half complete interrupts
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
+  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
+*/
 
   /* USER CODE END 2 */
 
@@ -205,7 +243,7 @@ int main(void)
   while (1)
   {
 	  // Toggle heartbeat LED
-	  led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
+	  //led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
 
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
@@ -219,7 +257,7 @@ int main(void)
 		  event_relay_mute = EVENT_EFFECT;
 	  }
 
-	  sm_relay_mute(&state_relay_mute, event_relay_mute);
+	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
 	  // Generate new triangle wave based on latest depth input
 	  generate_triangle_wave_floatingpoint(*adc_raw.Depth, *adc_raw.Offset);
@@ -227,7 +265,7 @@ int main(void)
 	  // Set parameters based on control inputs
 	  set_rate(*adc_raw.Rate);
 	  set_volume(*adc_raw.Vol);
-	  set_phase(&state_phase);
+	  set_phase(&state_phase, &LED_tap);
 
 	  /* XXX: DEBUGGING CODE START */
 	  // Toggle red LED 2 to measure loop time
@@ -309,17 +347,41 @@ void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 	adc->Vol = &adc_buffer[8];
 }
 
-void set_phase(StatePhase* state){
-	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
-			  pDIN_HARM_MODE_1_Pin);
-	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
-			  pDIN_HARM_MODE_2_Pin);
-	  if (!ph_left){sm_phase(state, EVENT_PAN);}
-	  else if (!ph_right){sm_phase(state, EVENT_HARM);}
-	  else {sm_phase(state, EVENT_STD);}
+// Initialize LEDs with GPIO ports/pins, and set default states
+void init_LEDs(LED* LED_bypass, LED* LED_tap){
+	LED_tap->PortRed = pDOUT_LED1_R_GPIO_Port;
+	LED_tap->PinRed = pDOUT_LED1_R_Pin;
+	LED_tap->PortGreen = pDOUT_LED1_G_GPIO_Port;
+	LED_tap->PinGreen = pDOUT_LED1_G_Pin;
+	LED_tap->PortBlue = pDOUT_LED1_B_GPIO_Port;
+	LED_tap->PinBlue = pDOUT_LED1_B_Pin;
+
+	LED_bypass->PortRed = pDOUT_LED2_R_GPIO_Port;
+	LED_bypass->PinRed = pDOUT_LED2_R_Pin;
+	LED_bypass->PortGreen = pDOUT_LED2_G_GPIO_Port;
+	LED_bypass->PinGreen = pDOUT_LED2_G_Pin;
+	LED_bypass->PortBlue = pDOUT_LED2_B_GPIO_Port;
+	LED_bypass->PinBlue = pDOUT_LED2_B_Pin;
+
+	set_LED_color(LED_tap, GREEN);
+	set_LED_color(LED_bypass, GREEN);
+	set_LED_state(LED_tap, OFF);
+	set_LED_state(LED_bypass, OFF);
 }
 
-void sm_phase(StatePhase* state, EventPhase event){
+void set_phase(StatePhase* state, LED* LED_bypass){
+	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
+			  pDIN_HARM_MODE_1_Pin);
+	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
+			  pDIN_HARM_MODE_2_Pin);
+	  if (!ph_left){sm_phase(state, EVENT_PAN, LED_bypass);}
+	  else if (!ph_right){sm_phase(state, EVENT_HARM, LED_bypass);}
+	  else {sm_phase(state, EVENT_STD, LED_bypass);}
+}
+
+// TODO this is a bad function.
+// -> Maybe can simplify by using a struct to reduce states
+void sm_phase(StatePhase* state, EventPhase event, LED* LED_bypass){
 	switch (*state) {
 		case STATE_STD:
 			if (event == EVENT_HARM){
@@ -332,25 +394,21 @@ void sm_phase(StatePhase* state, EventPhase event){
 				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
 				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+				set_LED_color(LED_bypass, GREEN);
 			}
 			else if (event == EVENT_PAN){
 				*state = STATE_PAN;
 				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
-			}
+				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+				set_LED_color(LED_bypass, BLUE);
 
+			}
 			break;
 		case STATE_HARM:
 			if (event == EVENT_STD){
@@ -363,9 +421,7 @@ void sm_phase(StatePhase* state, EventPhase event){
 				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
 				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+				set_LED_color(LED_bypass, RED);
 			}
 			else if (event == EVENT_PAN){
 				*state = STATE_PAN;
@@ -377,9 +433,7 @@ void sm_phase(StatePhase* state, EventPhase event){
 				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
 				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
+				set_LED_color(LED_bypass, BLUE);
 			}
 			break;
 		case STATE_PAN:
@@ -393,9 +447,8 @@ void sm_phase(StatePhase* state, EventPhase event){
 				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
 				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+				set_LED_color(LED_bypass, RED);
+
 			}
 			else if (event == EVENT_HARM){
 				*state = STATE_HARM;
@@ -407,18 +460,14 @@ void sm_phase(StatePhase* state, EventPhase event){
 				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
 				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
 				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
+				set_LED_color(LED_bypass, GREEN);
 			}
 			break;
 
 		default:
-
 			break;
 	}
 }
-
 
 void set_volume(uint16_t vol){
 	float fl_vol = (float)(ADC_RESOLUTION - vol);
@@ -436,59 +485,8 @@ void set_rate(uint16_t rate_knob){
 	__HAL_TIM_SET_PRESCALER(&htim8, rate_arr);
 }
 
-/* Toggles LED if it's been longer than timout_ms since last toggle*/
-void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_Pin){
-	static uint32_t last_toggle_ms = 0;
-	uint32_t tick = HAL_GetTick();
-
-	if (tick - last_toggle_ms >= timeout_ms){
-		last_toggle_ms = tick;
-		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
-
-	}
-	return;
-}
-
-/*
-void generate_triangle_wave_fixedpoint(uint32_t depth, uint32_t offset){
-	uint32_t f_depth = depth << SHIFT_AMOUNT;
-	uint32_t f_max = (WAVETABLE_DEPTH - 128) << SHIFT_AMOUNT;
-	uint32_t f_min = (WAVETABLE_DEPTH - depth) << SHIFT_AMOUNT;
-	uint32_t f_step_up;
-	if (offset > 0){
-		f_step_up = f_depth / offset;
-	}
-	else{
-		f_step_up = f_max;
-	}
-	uint32_t f_step_down = f_depth / (WAVETABLE_WIDTH-offset);
-	uint32_t f_val = f_min;
-	//uint32_t val;
-
-	for (int i=0; i<offset; i++){
-		//val = f_val >> SHIFT_AMOUNT;
-		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_SET);
-		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_SET);
-		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
-		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_RESET);
-		f_val = f_val+f_step_up;
-		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_RESET);
-	}
-
-	f_val = f_max;
-	dma_wavetable[offset] = f_val >> SHIFT_AMOUNT;
-
-	for (int i=offset+1; i<WAVETABLE_WIDTH; i++){
-		//val = f_val >> SHIFT_AMOUNT;
-		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
-		f_val = f_val-f_step_down;
-	}
-	return;
-}
-*/
-
-void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset){
-
+void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset)
+{
 	float fl_depth = (float)depth;
 	float fl_offset = (float) offset;
 	float fl_max = WAVETABLE_DEPTH;
@@ -521,28 +519,29 @@ void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset){
 	return;
 }
 
-void check_HAL_states(){
-	HAL_DMA_StateTypeDef adc_dma_state = HAL_DMA_GetState(hadc1.DMA_Handle);
-	if (adc_dma_state == HAL_DMA_STATE_RESET){
-		// DMA not properly initialized
-		Error_Handler();
-	}
-
-	uint32_t adc_dma_error = HAL_DMA_GetError (hadc1.DMA_Handle);
-	if (adc_dma_error != HAL_DMA_ERROR_NONE){
-		// Some sort of DMA error
-		Error_Handler();
-	}
-}
-
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
 
 }
+
+void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef *hdma)
+{
+	// TODO don't call function from interrupt
+	set_LED_state(&LED_tap, OFF);
+	return;
+}
+
+void My_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
+{
+	set_LED_state(&LED_tap, ON);
+	return;
+}
+
 
 /* USER CODE END 4 */
 

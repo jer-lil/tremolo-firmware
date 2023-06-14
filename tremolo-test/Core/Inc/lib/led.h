@@ -43,6 +43,8 @@ typedef struct {
 } LED;
 
 LED defaultLED();
+void initLED(LED*, LEDColor, LEDOnState, GPIO_TypeDef*, uint16_t,
+		GPIO_TypeDef*, uint16_t, GPIO_TypeDef* , uint16_t);
 void set_LED_color(LED*, LEDColor);
 void set_LED_state(LED*, LEDOnState);
 void led_toggle_tick_rgb(uint32_t, LED*, LEDColor);

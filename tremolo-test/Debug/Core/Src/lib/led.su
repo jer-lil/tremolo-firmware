@@ -1,6 +1,0 @@
-../Core/Src/lib/led.c:18:5:defaultLED	56	static
-../Core/Src/lib/led.c:24:6:initLED	24	static
-../Core/Src/lib/led.c:47:6:set_LED_color	16	static
-../Core/Src/lib/led.c:58:6:set_LED_state	16	static
-../Core/Src/lib/led.c:92:6:led_toggle_tick_rgb	32	static
-../Core/Src/lib/led.c:107:6:led_toggle_tick_single	32	static

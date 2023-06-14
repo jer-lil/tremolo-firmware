@@ -1,3 +1,0 @@
-../Core/Src/lib/sm_bypass.c:14:6:sm_bypass_sw	32	static
-../Core/Src/lib/sm_bypass.c:54:6:sm_effect	16	static
-../Core/Src/lib/sm_bypass.c:74:6:sm_relay_mute	32	static

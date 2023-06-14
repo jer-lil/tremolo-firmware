@@ -154,6 +154,10 @@ void Error_Handler(void);
 #define VOL_MAP_MAX 1023
 #define VOL_MAP_MIN 100
 
+// 0-2.5V (about the max I've seen the circuit output)
+#define ENV_MIN 0
+#define ENV_MAX 775
+
 #define ADC_DMA_BUF_LENGTH 9
 
 /* Toggle heartbeat LED every 500ms */

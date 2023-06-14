@@ -96,6 +96,7 @@ void set_volume(uint16_t);
 void set_rate(uint16_t);
 void set_phase(StatePhase*, LED*);
 void sm_phase(StatePhase*, EventPhase, LED*);
+uint32_t env_map(uint32_t);
 
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
@@ -135,13 +136,17 @@ int main(void)
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
   StatePhase state_phase = STATE_STD;
-  //StatePhase state_phase = STATE_MONO;
-  //StateHarm state_harm = STATE_STANDARD;
 
   init_LEDs(&LED_bypass, &LED_tap);
 
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
+
+  uint32_t rate = *adc_raw.Rate;
+  uint32_t depth = *adc_raw.Depth;
+  uint32_t offset = *adc_raw.Depth;
+  uint32_t vol = *adc_raw.Vol;
+  uint32_t env = *adc_raw.Trim1;
 
   /* USER CODE END Init */
 
@@ -245,6 +250,13 @@ int main(void)
 	  // Toggle heartbeat LED
 	  //led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
 
+	  // Default parameters to ADC values; can be overwritten
+	  rate = *adc_raw.Rate;
+	  depth = *adc_raw.Depth;
+	  offset = *adc_raw.Offset;
+	  vol = *adc_raw.Vol;
+	  env = *adc_raw.Trim1;
+
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
 	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
@@ -260,19 +272,30 @@ int main(void)
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
 	  // Generate new triangle wave based on latest depth input
-	  generate_triangle_wave_floatingpoint(*adc_raw.Depth, *adc_raw.Offset);
+	  generate_triangle_wave_floatingpoint(depth, offset);
 
-	  // Set parameters based on control inputs
-	  set_rate(*adc_raw.Rate);
-	  set_volume(*adc_raw.Vol);
+	  // TODO move this to a function
+
+	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
+			  pDIN_ENV_MODE_1_Pin)){
+		  // Toggle to left, envelope controls Rate
+		  rate = env_map(env);
+		  set_LED_color(&LED_bypass, RED);
+	  }
+	  else if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_2_GPIO_Port,
+			  pDIN_ENV_MODE_2_Pin)){
+		  // Toggle to right, envelope controls Depth
+		  depth = env_map(env);
+		  set_LED_color(&LED_bypass, BLUE);
+	  }
+	  else {
+		  // Toggle in middle, no envelope control
+		  set_LED_color(&LED_bypass, GREEN);
+	  }
+
+	  set_rate(rate);
+	  set_volume(vol);
 	  set_phase(&state_phase, &LED_tap);
-
-	  /* XXX: DEBUGGING CODE START */
-	  // Toggle red LED 2 to measure loop time
-	  //HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
-
-	  /* XXX: DEBUGGING CODE END */
-
   }
     /* USER CODE END WHILE */
 
@@ -349,24 +372,14 @@ void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 
 // Initialize LEDs with GPIO ports/pins, and set default states
 void init_LEDs(LED* LED_bypass, LED* LED_tap){
-	LED_tap->PortRed = pDOUT_LED1_R_GPIO_Port;
-	LED_tap->PinRed = pDOUT_LED1_R_Pin;
-	LED_tap->PortGreen = pDOUT_LED1_G_GPIO_Port;
-	LED_tap->PinGreen = pDOUT_LED1_G_Pin;
-	LED_tap->PortBlue = pDOUT_LED1_B_GPIO_Port;
-	LED_tap->PinBlue = pDOUT_LED1_B_Pin;
-
-	LED_bypass->PortRed = pDOUT_LED2_R_GPIO_Port;
-	LED_bypass->PinRed = pDOUT_LED2_R_Pin;
-	LED_bypass->PortGreen = pDOUT_LED2_G_GPIO_Port;
-	LED_bypass->PinGreen = pDOUT_LED2_G_Pin;
-	LED_bypass->PortBlue = pDOUT_LED2_B_GPIO_Port;
-	LED_bypass->PinBlue = pDOUT_LED2_B_Pin;
-
-	set_LED_color(LED_tap, GREEN);
-	set_LED_color(LED_bypass, GREEN);
-	set_LED_state(LED_tap, OFF);
-	set_LED_state(LED_bypass, OFF);
+	initLED(LED_tap, GREEN, OFF,
+			pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin,
+			pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin,
+			pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin);
+	initLED(LED_bypass, GREEN, OFF,
+			pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
+			pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin,
+			pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
 }
 
 void set_phase(StatePhase* state, LED* LED_bypass){
@@ -377,6 +390,16 @@ void set_phase(StatePhase* state, LED* LED_bypass){
 	  if (!ph_left){sm_phase(state, EVENT_PAN, LED_bypass);}
 	  else if (!ph_right){sm_phase(state, EVENT_HARM, LED_bypass);}
 	  else {sm_phase(state, EVENT_STD, LED_bypass);}
+}
+
+uint32_t env_map(uint32_t env)
+{
+	// Cap env at ENV_MAX just in case it goes over
+	if (env > ENV_MAX){
+		env = ENV_MAX;
+	}
+	float fl_env = (float)env;
+	return (uint32_t)(fl_env * (ADC_RESOLUTION) / ENV_MAX);
 }
 
 // TODO this is a bad function.

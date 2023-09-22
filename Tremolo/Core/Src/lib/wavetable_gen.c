@@ -134,6 +134,36 @@ void wavetable_gen_square(
 	uint16_t table_width,
 	uint16_t table_depth)
 {
+	// Starting index in the table; based on phase
+	uint16_t start_index = (uint16_t)(table_width-1)*phase;
+	// Midpoint_rel is where the triangle "peak" would be if phase=0
+	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
+	// midpoint_abs accounts for phase offset
+	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
+	// Index is the current table index
+	uint16_t index = start_index;
+	// Val is the current table value; it starts at the lowest value
+	uint16_t low_val = table_depth - ((float)table_depth*depth);
+	uint16_t high_val = table_depth;
+
+	table[index] = low_val;
+	index = (index + 1) % (table_width);
+
+	// Low portion of square wave
+	if (midpoint_rel > 0)
+	{
+		while (index != midpoint_abs)
+		{
+			table[index] = low_val;
+			index = (index + 1) % (table_width);
+		}
+	}
+	// High portion of square wave
+	while (index!=start_index)
+	{
+		table[index] = high_val;
+		index = (index + 1) % (table_width);
+	}
 	return;
 }
 

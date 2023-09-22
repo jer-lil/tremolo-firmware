@@ -146,6 +146,14 @@ int main(void)
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
 
+  uint32_t rate = *adc_raw.Rate;
+  uint32_t depth = *adc_raw.Depth;
+  uint32_t offset = *adc_raw.Offset;
+  uint32_t vol = *adc_raw.Vol;
+  uint32_t env = *adc_raw.Trim1;
+  // TODO rename this adc parameter
+  uint32_t phase = *adc_raw.Shape;
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -239,13 +247,7 @@ int main(void)
   __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
 */
 
-  uint32_t rate = *adc_raw.Rate;
-  uint32_t depth = *adc_raw.Depth;
-  uint32_t offset = *adc_raw.Depth;
-  uint32_t vol = *adc_raw.Vol;
-  uint32_t env = *adc_raw.Trim1;
-  // TODO rename this adc parameter
-  uint32_t phase = *adc_raw.Shape;
+
 
   /* USER CODE END 2 */
 
@@ -253,6 +255,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  rate = *adc_raw.Rate;
+	  depth = *adc_raw.Depth;
+	  offset = *adc_raw.Offset;
+	  vol = *adc_raw.Vol;
+	  env = *adc_raw.Trim1;
+	  // TODO rename this adc parameter
+	  phase = *adc_raw.Shape;
+
 	  // Read inputs
 	  // TODO move inputs to another file
 	  set_rate(rate);

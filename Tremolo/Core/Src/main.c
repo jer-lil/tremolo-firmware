@@ -29,6 +29,8 @@
 
 #include "lib/sm_bypass.h"
 #include "lib/led.h"
+#include "lib/wavetable_gen.h"
+
 
 /* USER CODE END Includes */
 
@@ -272,10 +274,17 @@ int main(void)
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
 	  // Generate new triangle wave based on latest depth input
-	  generate_triangle_wave_floatingpoint(depth, offset);
+	  //generate_triangle_wave_floatingpoint(depth, offset);
+
+	  // Testing new wavetable_gen function. Some temp variables declared.
+	  Shape shape = TRI;
+	  float phase_fl = (float)*adc_raw.Subdiv / 1023;
+	  float offset_fl = (float)offset / 1023;
+	  float depth_fl = (float)depth / 1023;
+	  wavetable_gen(shape, depth_fl, offset_fl, phase_fl,
+			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
 	  // TODO move this to a function
-
 	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
 			  pDIN_ENV_MODE_1_Pin)){
 		  // Toggle to left, envelope controls Rate

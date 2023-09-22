@@ -97,6 +97,7 @@ void set_lfo_polarity();
 void set_volume(uint16_t);
 void set_rate(uint16_t);
 void set_phase(StatePhase*, LED*);
+void set_shape(Shape*);
 void sm_phase(StatePhase*, EventPhase, LED*);
 uint32_t env_map(uint32_t);
 
@@ -138,17 +139,12 @@ int main(void)
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
   StatePhase state_phase = STATE_STD;
+  Shape shape = ERR;
 
   init_LEDs(&LED_bypass, &LED_tap);
 
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
-
-  uint32_t rate = *adc_raw.Rate;
-  uint32_t depth = *adc_raw.Depth;
-  uint32_t offset = *adc_raw.Depth;
-  uint32_t vol = *adc_raw.Vol;
-  uint32_t env = *adc_raw.Trim1;
 
   /* USER CODE END Init */
 
@@ -243,21 +239,26 @@ int main(void)
   __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
 */
 
+  uint32_t rate = *adc_raw.Rate;
+  uint32_t depth = *adc_raw.Depth;
+  uint32_t offset = *adc_raw.Depth;
+  uint32_t vol = *adc_raw.Vol;
+  uint32_t env = *adc_raw.Trim1;
+  // TODO rename this adc parameter
+  uint32_t phase = *adc_raw.Shape;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  // Toggle heartbeat LED
-	  //led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
-
-	  // Default parameters to ADC values; can be overwritten
-	  rate = *adc_raw.Rate;
-	  depth = *adc_raw.Depth;
-	  offset = *adc_raw.Offset;
-	  vol = *adc_raw.Vol;
-	  env = *adc_raw.Trim1;
+	  // Read inputs
+	  // TODO move inputs to another file
+	  set_rate(rate);
+	  set_volume(vol);
+	  set_phase(&state_phase, &LED_tap);
+	  set_shape(&shape);
 
 	  // Check for bypass switch state and run state machine
 	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
@@ -273,14 +274,12 @@ int main(void)
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
-	  // Generate new triangle wave based on latest depth input
-	  //generate_triangle_wave_floatingpoint(depth, offset);
 
-	  // Testing new wavetable_gen function. Some temp variables declared.
-	  Shape shape = TRI;
-	  float phase_fl = (float)*adc_raw.Subdiv / 1023;
+	  // TODO move these to mapping functions
+	  float phase_fl = (float)phase / 1023;
 	  float offset_fl = (float)offset / 1023;
 	  float depth_fl = (float)depth / 1023;
+	  // Generate wavetable
 	  wavetable_gen(shape, depth_fl, offset_fl, phase_fl,
 			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
@@ -302,9 +301,7 @@ int main(void)
 		  set_LED_color(&LED_bypass, GREEN);
 	  }
 
-	  set_rate(rate);
-	  set_volume(vol);
-	  set_phase(&state_phase, &LED_tap);
+
   }
     /* USER CODE END WHILE */
 
@@ -391,6 +388,8 @@ void init_LEDs(LED* LED_bypass, LED* LED_tap){
 			pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
 }
 
+// TODO move to another file
+// TODO see if these can be genericised
 void set_phase(StatePhase* state, LED* LED_bypass){
 	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
 			  pDIN_HARM_MODE_1_Pin);
@@ -399,6 +398,17 @@ void set_phase(StatePhase* state, LED* LED_bypass){
 	  if (!ph_left){sm_phase(state, EVENT_PAN, LED_bypass);}
 	  else if (!ph_right){sm_phase(state, EVENT_HARM, LED_bypass);}
 	  else {sm_phase(state, EVENT_STD, LED_bypass);}
+}
+
+void set_shape(Shape* shape)
+{
+	uint32_t right = HAL_GPIO_ReadPin(pDIN_PAN_MODE_1_GPIO_Port,
+			pDIN_PAN_MODE_1_Pin);
+	uint32_t left = HAL_GPIO_ReadPin(pDIN_PAN_MODE_2_GPIO_Port,
+			pDIN_PAN_MODE_2_Pin);
+	if (!left) {*shape=SINE; }
+	else if (!right) { *shape = SQUR; }
+	else { *shape = TRI; }
 }
 
 uint32_t env_map(uint32_t env)
@@ -515,40 +525,6 @@ void set_rate(uint16_t rate_knob){
 	float fl_rate_arr = fl_rate * (RATE_ARR_MAX - RATE_ARR_MIN) / ADC_RESOLUTION;
 	uint16_t rate_arr = (uint16_t)fl_rate_arr;
 	__HAL_TIM_SET_PRESCALER(&htim8, rate_arr);
-}
-
-void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset)
-{
-	float fl_depth = (float)depth;
-	float fl_offset = (float) offset;
-	float fl_max = WAVETABLE_DEPTH;
-	float fl_min = WAVETABLE_DEPTH - fl_depth;
-	// Step up is initialized later only if offset != 0
-	float fl_step_up;
-	float fl_step_down = fl_depth / (WAVETABLE_WIDTH-fl_offset);
-	float fl_val = fl_min;
-
-	uint16_t j = WAVETABLE_WIDTH>>1;
-
-	if (offset > 0){
-		fl_step_up = fl_depth / fl_offset;
-		for (int i=0; i<offset; i++){
-			dma_wavetable_a[i] = (uint16_t)fl_val;
-			j = (j + 1) % (WAVETABLE_WIDTH);
-			dma_wavetable_b[j] = (uint16_t)fl_val;
-			fl_val = fl_val+fl_step_up;
-		}
-	}
-
-	// Always want value at offset index to be max value
-	fl_val = fl_max;
-	for (int i=offset; i<WAVETABLE_WIDTH; i++){
-		dma_wavetable_a[i] = (uint16_t)fl_val;
-		j = (j + 1) % (WAVETABLE_WIDTH);
-		dma_wavetable_b[j] = (uint16_t)fl_val;
-		fl_val = fl_val-fl_step_down;
-	}
-	return;
 }
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)

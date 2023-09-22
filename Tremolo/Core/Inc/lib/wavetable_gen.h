@@ -16,6 +16,7 @@
  *
  */
 typedef enum {
+	ERR = 0,
 	TRI = 1, /**< TRI */
 	SINE = 2,/**< SINE */
 	SQUR = 3,/**< SQUR */
@@ -30,6 +31,32 @@ void wavetable_gen(
 	uint16_t,
 	uint16_t);
 
+void wavetable_gen_tri(
+	Shape,
+	float,
+	float,
+	float,
+	uint16_t*,
+	uint16_t,
+	uint16_t);
+
+void wavetable_gen_sine(
+	Shape,
+	float,
+	float,
+	float,
+	uint16_t*,
+	uint16_t,
+	uint16_t);
+
+void wavetable_gen_square(
+	Shape,
+	float,
+	float,
+	float,
+	uint16_t*,
+	uint16_t,
+	uint16_t);
 
 float rate_map(uint16_t, uint16_t);
 

@@ -30,10 +30,39 @@
  *	|\ -- shape=TRI, depth=1, offset=0, phase=0
  *	\/ -- shape=TRI, depth=1, offset=0.5, phase=0.5
  *
- *	TODO right now phase is not implemented and won't be easy to drop-in
- *
  */
 void wavetable_gen(
+	Shape shape,
+	float depth,
+	float offset,
+	float phase,
+	uint16_t* table,
+	uint16_t table_width,
+	uint16_t table_depth)
+{
+	// TODO bounds checking
+	// TODO any pre-calcs to do for all 3 shapes?
+	switch (shape)
+	{
+		case TRI:
+			wavetable_gen_tri(shape, depth, offset, phase,
+					table, table_width, table_depth);
+			break;
+		case SINE:
+			wavetable_gen_sine(shape, depth, offset, phase,
+					table, table_width, table_depth);
+			break;
+		case SQUR:
+			wavetable_gen_square(shape, depth, offset, phase,
+					table, table_width, table_depth);
+			break;
+		default:
+			// TODO error
+			break;
+	}
+}
+
+void wavetable_gen_tri(
 	Shape shape,
 	float depth,
 	float offset,
@@ -47,12 +76,12 @@ void wavetable_gen(
 	// Midpoint_rel is where the triangle "peak" would be if phase=0
 	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
 	// midpoint_abs accounts for phase offset
-	uint16_t midpoint_abs = midpoint_rel + start_index;
+	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
 	// Val is the current table value; it starts at the lowest value
 	float val = (float)table_depth - ((float)table_depth*depth);
-	// The amount to increase val by each step on the rising slope
+	// The amount by which to increase/decrease val between entries
 	float step_up;
 	float step_down;
 
@@ -68,7 +97,6 @@ void wavetable_gen(
 			val = val+step_up;
 			table[index] = (uint16_t)val;
 			index = (index + 1) % (table_width);
-
 		}
 	}
 	// Falling slope of triangle. Skip if offset is all the way left.
@@ -84,6 +112,31 @@ void wavetable_gen(
 
 	return;
 }
+
+void wavetable_gen_sine(
+	Shape shape,
+	float depth,
+	float offset,
+	float phase,
+	uint16_t* table,
+	uint16_t table_width,
+	uint16_t table_depth)
+{
+	return;
+}
+
+void wavetable_gen_square(
+	Shape shape,
+	float depth,
+	float offset,
+	float phase,
+	uint16_t* table,
+	uint16_t table_width,
+	uint16_t table_depth)
+{
+	return;
+}
+
 
 /**
  * @brief maps raw rate input to subdivided rate in Hz

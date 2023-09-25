@@ -22,6 +22,6 @@ struct Param{
 
 struct Param param_init(uint32_t*, float, float, uint32_t, uint32_t);
 float map_lin(struct Param*);
-
+float map_rate_pseudo_log(struct Param*);
 
 #endif /* INC_LIB_PARAM_H_ */

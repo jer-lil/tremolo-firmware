@@ -30,6 +30,7 @@
 #include "lib/sm_bypass.h"
 #include "lib/led.h"
 #include "lib/wavetable_gen.h"
+#include "lib/param.h"
 
 
 /* USER CODE END Includes */
@@ -95,7 +96,7 @@ void init_adc_channels(Adc*, uint32_t[]);
 void init_LEDs(LED*, LED*);
 void set_lfo_polarity();
 void set_volume(uint16_t);
-void set_rate(uint16_t);
+void set_rate(float);
 void set_phase(StatePhase*, LED*);
 void set_shape(Shape*);
 void sm_phase(StatePhase*, EventPhase, LED*);
@@ -146,13 +147,18 @@ int main(void)
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
 
-  uint32_t rate = *adc_raw.Rate;
-  uint32_t depth = *adc_raw.Depth;
-  uint32_t offset = *adc_raw.Offset;
+  //uint32_t rate = *adc_raw.Rate;
+  //uint32_t depth = *adc_raw.Depth;
+  //uint32_t offset = *adc_raw.Offset;
   uint32_t vol = *adc_raw.Vol;
-  uint32_t env = *adc_raw.Trim1;
+  //uint32_t env = *adc_raw.Trim1;
   // TODO rename this adc parameter
-  uint32_t phase = *adc_raw.Shape;
+  //uint32_t phase = *adc_raw.Shape;
+
+  struct Param rate  = param_init(adc_raw.Rate, RATE_ARR_MIN, RATE_ARR_MAX, ADC_RESOLUTION, 1);
+  struct Param depth = param_init(adc_raw.Depth, 0, 1, ADC_RESOLUTION, 0);
+  struct Param offset = param_init(adc_raw.Offset, 0, 1, ADC_RESOLUTION, 0);
+  struct Param phase = param_init(adc_raw.Shape, 0, 1, ADC_RESOLUTION, 0);
 
   /* USER CODE END Init */
 
@@ -255,17 +261,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  rate = *adc_raw.Rate;
-	  depth = *adc_raw.Depth;
-	  offset = *adc_raw.Offset;
+	  //rate = *adc_raw.Rate;
+	  //depth = *adc_raw.Depth;
+	  //offset = *adc_raw.Offset;
 	  vol = *adc_raw.Vol;
-	  env = *adc_raw.Trim1;
-	  // TODO rename this adc parameter
-	  phase = *adc_raw.Shape;
+	  //env = *adc_raw.Trim1;
+	  //phase = *adc_raw.Shape;
 
 	  // Read inputs
 	  // TODO move inputs to another file
-	  set_rate(rate);
+	  set_rate(rate.map_val(&rate));
 	  set_volume(vol);
 	  set_phase(&state_phase, &LED_tap);
 	  set_shape(&shape);
@@ -285,25 +290,26 @@ int main(void)
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
 
-	  // TODO move these to mapping functions
-	  float phase_fl = (float)phase / 1023;
-	  float offset_fl = (float)offset / 1023;
-	  float depth_fl = (float)depth / 1023;
 	  // Generate wavetable
-	  wavetable_gen(shape, depth_fl, offset_fl, phase_fl,
+	  wavetable_gen(shape,
+			  depth.map_val(&depth),
+			  offset.map_val(&offset),
+			  phase.map_val(&phase),
 			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
 	  // TODO move this to a function
 	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
 			  pDIN_ENV_MODE_1_Pin)){
 		  // Toggle to left, envelope controls Rate
-		  rate = env_map(env);
+		  rate.map_max = ENV_MAX;
+		  rate.val = adc_raw.Trim1;
 		  set_LED_color(&LED_bypass, RED);
 	  }
 	  else if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_2_GPIO_Port,
 			  pDIN_ENV_MODE_2_Pin)){
 		  // Toggle to right, envelope controls Depth
-		  depth = env_map(env);
+		  depth.map_max = ENV_MAX;
+		  depth.val = adc_raw.Trim1;
 		  set_LED_color(&LED_bypass, BLUE);
 	  }
 	  else {
@@ -530,11 +536,9 @@ void set_volume(uint16_t vol){
 
 // TODO implement with tap and external sync
 // TODO add subdivision
-void set_rate(uint16_t rate_knob){
-	float fl_rate = (float)(ADC_RESOLUTION - rate_knob);
-	float fl_rate_arr = fl_rate * (RATE_ARR_MAX - RATE_ARR_MIN) / ADC_RESOLUTION;
-	uint16_t rate_arr = (uint16_t)fl_rate_arr;
-	__HAL_TIM_SET_PRESCALER(&htim8, rate_arr);
+void set_rate(float rate){
+	//__HAL_TIM_SET_PRESCALER(&htim8, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&htim8, (uint32_t)rate);
 }
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)

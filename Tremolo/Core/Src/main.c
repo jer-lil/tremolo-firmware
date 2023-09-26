@@ -155,10 +155,10 @@ int main(void)
   // TODO rename this adc parameter
   //uint32_t phase = *adc_raw.Shape;
 
-  struct Param rate  = param_init(adc_raw.Rate, RATE_ARR_MIN, RATE_ARR_MAX, ADC_RESOLUTION, 1);
-  struct Param depth = param_init(adc_raw.Depth, 0, 1, ADC_RESOLUTION, 0);
-  struct Param offset = param_init(adc_raw.Offset, 0, 1, ADC_RESOLUTION, 0);
-  struct Param phase = param_init(adc_raw.Shape, 0, 1, ADC_RESOLUTION, 0);
+  struct Param rate  = param_init(adc_raw.Rate, RATE_ARR_MIN, RATE_ARR_MAX, 0, ADC_RESOLUTION, 1);
+  struct Param depth = param_init(adc_raw.Depth, 0, 1, 0, ADC_RESOLUTION, 0);
+  struct Param offset = param_init(adc_raw.Offset, 0, 1, 0, ADC_RESOLUTION, 0);
+  struct Param phase = param_init(adc_raw.Shape, 0, 1, 0, ADC_RESOLUTION, 0);
 
   /* USER CODE END Init */
 

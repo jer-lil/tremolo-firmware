@@ -168,19 +168,6 @@ void wavetable_gen_square(
 }
 
 
-/**
- * @brief maps raw rate input to subdivided rate in Hz
- *
- * @param rate_base 0-1023 raw rate input
- * @param integer divisor of rate input, e.g. quarter note = 4
- */
-float rate_map(uint16_t rate_base, uint16_t subdiv){
-	float rate_hz = (float)rate_base;
-	// do some mapping
-	return rate_hz;
-}
-
-
 
 
 

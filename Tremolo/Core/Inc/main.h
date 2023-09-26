@@ -149,7 +149,7 @@ void Error_Handler(void);
 
 // TODO define these programmatically based on min/max LFO rates
 #define RATE_ARR_MIN 256
-#define RATE_ARR_MAX 4096
+#define RATE_ARR_MAX 1024
 
 #define VOL_MAP_MAX 1023
 #define VOL_MAP_MIN 100

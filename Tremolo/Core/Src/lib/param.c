@@ -12,39 +12,75 @@
 
 // TODO make other map function types that can be passed in
 struct Param param_init(uint32_t* val, float map_min, float map_max,
-		uint32_t val_max, uint32_t invert)
+		uint32_t val_min, uint32_t val_max, uint32_t invert)
 {
 	struct Param param = {val, map_rate_pseudo_log, val_max, map_min, map_max, invert};
 	return param;
 }
 
-// TODO rename, make this generic and be able to call other mapping functions
-float map_lin_old(struct Param* self)
+
+/*
+ * Mapping functions specific to certain parameters
+ */
+
+float map_param_lin(struct Param* self)
+{
+	float ret = map_lin(
+			*self->val,
+			self->val_min,
+			self->val_max,
+			self->map_min,
+			self->map_max);
+	return ret;
+}
+
+float map_rate_log(struct Param* self)
+{
+
+	float ret = map_log(
+			*self->val,
+			0,
+			self->val_max,
+			self->map_min,
+			self->map_max);
+	return ret;
+}
+
+float map_rate_pseudo_log(struct Param* self)
 {
 	float val = (float)(*self->val);
 	float val_max = (float)self->val_max;
+	// Cap value at max value
+	val = fminf(val, val_max);
+	// TODO magic number
+	float val_min = 0;
+	float val_offset = 0.5;
+	//float val_midpoint = (val_max + val_min) / 2;
+	float val_midpoint = val_min + (val_offset * (val_max - val_min));
 	float map_min = (float)self->map_min;
 	float map_max = (float)self->map_max;
-	uint32_t invert = self->invert;
-	float frac;
-	// Cap value at max value
-	if (val > val_max)
+
+	// TODO magic number. How offset/kinked the map is
+	float offset = 0.5;
+	float map_midpoint = map_min + (offset *(map_max - map_min));
+	if (val < val_midpoint)
 	{
-		val = val_max;
-	}
-	// Flip polarity if needed
-	// TODO this can probably be done in a smarter way
-	if (invert)
-	{
-		frac = 1 - (val / val_max);
+		val_min = val_midpoint;
+		map_max = map_midpoint;
 	}
 	else
 	{
-		frac = (val / val_max);
+		val_max = val_midpoint;
+		map_min = map_midpoint;
 	}
-	// Map {0 to val_max} onto {map_min to map_max}
-	return map_min + (frac * (map_max - map_min));
+	float ret = map_lin(val, val_max, val_min, map_min, map_max);
+	return ret;
 }
+
+/*
+ * Generic mapping functions
+ * TODO put these in their own file eventually
+ */
 
 /**
  * @brief Generic linear mapping function
@@ -63,48 +99,30 @@ float map_lin_old(struct Param* self)
 float map_lin(float val, float val_min, float val_max,
 		float map_min, float map_max)
 {
-	// Cap value at max value
-	val = fminf(val, val_max);
 	// Percentage of val across val range
 	float frac = (val - val_min) / (val_max - val_min);
 	float ret = map_min + frac * (map_max - map_min);
 	return ret;
 }
 
-
-float map_rate_pseudo_log(struct Param* self)
+float map_log(float val, float val_min, float val_max,
+		float map_min, float map_max)
 {
-	float val = (float)(*self->val);
-	float val_max = (float)self->val_max;
-	// TODO magic number
-	float val_min = 0;
-	float val_midpoint = (val_max + val_min) / 2;
-	float map_min = (float)self->map_min;
-	float map_max = (float)self->map_max;
-
-	// TODO magic number. How offset/kinked the map is
-	float offset = 0.1;
-	float map_midpoint = map_min + (offset *(map_max - map_min));
-	if (val < val_midpoint)
-	{
-		val_max = val_midpoint;
-		map_max = map_midpoint;
-	}
-	else
-	{
-		val_min = val_midpoint;
-		map_min = map_midpoint;
-	}
-	float ret = map_lin(val, val_min, val_max, map_min, map_max);
+	// TODO define these as constants later
+	float min_pow = log2f(map_min);
+	float max_pow = log2f(map_max);
+	float diff_pow = max_pow - min_pow;
+	float frac = (val - val_min) / (val_max - val_min);
+	float ret = map_min*powf(2, diff_pow*(1-frac));
 	return ret;
 }
 
-/*
-float map_rate_log(struct Param* self)
-{
 
-}
-*/
+
+
+
+
+
 
 
 

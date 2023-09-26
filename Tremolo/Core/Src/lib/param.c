@@ -10,7 +10,6 @@
 #include <lib/param.h>
 
 
-// TODO make other map function types that can be passed in
 struct Param param_init(
 		uint32_t* val,
 		ParamMap map_func,
@@ -20,7 +19,8 @@ struct Param param_init(
 		float map_max,
 		uint32_t invert)
 {
-	struct Param param = {val, map_func, val_max, map_min, map_max, invert};
+	struct Param param = {val, map_func, val_min, val_max,
+			map_min, map_max, invert};
 	return param;
 }
 
@@ -62,24 +62,23 @@ float map_rate_pseudo_log(struct Param* self)
 	float val_min = 0;
 	float val_offset = 0.5;
 	//float val_midpoint = (val_max + val_min) / 2;
-	float val_midpoint = val_min + (val_offset * (val_max - val_min));
+	float val_mid = val_min + (val_offset * (val_max - val_min));
 	float map_min = (float)self->map_min;
 	float map_max = (float)self->map_max;
 
 	// TODO magic number. How offset/kinked the map is
 	float offset = 0.5;
-	float map_midpoint = map_min + (offset *(map_max - map_min));
-	if (val < val_midpoint)
+	float map_mid = map_min + (offset *(map_max - map_min));
+	float ret;
+
+	if (val < val_mid)
 	{
-		val_min = val_midpoint;
-		map_max = map_midpoint;
+		ret = map_lin(val, val_min, val_mid, map_min, map_mid);
 	}
 	else
 	{
-		val_max = val_midpoint;
-		map_min = map_midpoint;
+		ret = map_lin(val, val_mid, val_max, map_mid, map_max);
 	}
-	float ret = map_lin(val, val_max, val_min, map_min, map_max);
 	return ret;
 }
 

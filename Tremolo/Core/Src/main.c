@@ -147,19 +147,44 @@ int main(void)
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
 
-  // Initialize params
+  // Initialize Parameters
   // TODO make vol a parameter too
   uint32_t vol = *adc_raw.Vol;
   // TODO use macros for min/max values
   // TODO move to function / clean up. Globals?
-  struct Param rate  = param_init(adc_raw.Rate, map_rate_log,
-		  RATE_ARR_MIN, RATE_ARR_MAX, 0, ADC_RESOLUTION, 1);
-  struct Param depth = param_init(adc_raw.Depth, map_param_lin,
-		  0, 1, 0, ADC_RESOLUTION, 0);
-  struct Param offset = param_init(adc_raw.Offset,  map_param_lin,
-		  0, 1, 0, ADC_RESOLUTION, 0);
-  struct Param phase = param_init(adc_raw.Shape,  map_param_lin,
-		  0, 1, 0, ADC_RESOLUTION, 0);
+  struct Param rate = {
+		  .val = adc_raw.Rate,
+		  .map_func = map_rate_pseudo_log,
+		  .val_min = 0,
+		  .val_max = ADC_RESOLUTION,
+		  .map_min = RATE_ARR_MIN,
+		  .map_max = RATE_ARR_MAX
+  };
+  struct Param depth = {
+		  .val = adc_raw.Depth,
+		  .map_func = map_param_lin,
+		  .val_min = 0,
+		  .val_max = ADC_RESOLUTION,
+		  .map_min = 0,
+		  .map_max = 1
+  };
+  struct Param offset = {
+  		  .val = adc_raw.Depth,
+  		  .map_func = map_param_lin,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = 0,
+  		  .map_max = 1
+    };
+  struct Param phase = {
+  		  .val = adc_raw.Depth,
+  		  .map_func = map_param_lin,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = 0,
+  		  .map_max = 1
+    };
+
 
   /* USER CODE END Init */
 
@@ -309,8 +334,9 @@ int main(void)
 	  else if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_2_GPIO_Port,
 			  pDIN_ENV_MODE_2_Pin)){
 		  // Toggle to right, envelope controls Depth
-		  depth.map_max = ENV_MAX;
-		  depth.val = adc_raw.Trim1;
+		  // TODO reconcile uint and float differences
+		  //depth.map_max = ENV_MAX;
+		  //depth.val = adc_raw.Trim1;
 		  set_LED_color(&LED_bypass, BLUE);
 	  }
 	  else {

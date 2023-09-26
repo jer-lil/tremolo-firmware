@@ -11,10 +11,16 @@
 
 
 // TODO make other map function types that can be passed in
-struct Param param_init(uint32_t* val, float map_min, float map_max,
-		uint32_t val_min, uint32_t val_max, uint32_t invert)
+struct Param param_init(
+		uint32_t* val,
+		ParamMap map_func,
+		uint32_t val_min,
+		uint32_t val_max,
+		float map_min,
+		float map_max,
+		uint32_t invert)
 {
-	struct Param param = {val, map_rate_pseudo_log, val_max, map_min, map_max, invert};
+	struct Param param = {val, map_func, val_max, map_min, map_max, invert};
 	return param;
 }
 

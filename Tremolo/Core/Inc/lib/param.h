@@ -10,10 +10,14 @@
 
 #include <stdint.h>
 
+// Forward declaration for typedef below
+struct Param;
+
+typedef float (*ParamMap)(struct Param* param);
 
 struct Param{
 	uint32_t* val;
-	float (*map_val)(struct Param* self);
+	ParamMap map_func;
 	uint32_t val_min;
 	uint32_t val_max;
 	float map_min;
@@ -21,10 +25,18 @@ struct Param{
 	uint32_t invert;
 };
 
-struct Param param_init(uint32_t*, float, float, uint32_t, uint32_t, uint32_t);
+struct Param param_init(
+		uint32_t*,
+		ParamMap,
+		uint32_t,
+		uint32_t,
+		float,
+		float,
+		uint32_t);
 
 
 // Mapping functions for specific parameters
+float map_param_lin(struct Param*);
 float map_rate_log(struct Param*);
 float map_rate_pseudo_log(struct Param*);
 

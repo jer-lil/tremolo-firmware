@@ -147,18 +147,19 @@ int main(void)
   Adc adc_raw;
   init_adc_channels(&adc_raw, adc_array);
 
-  //uint32_t rate = *adc_raw.Rate;
-  //uint32_t depth = *adc_raw.Depth;
-  //uint32_t offset = *adc_raw.Offset;
+  // Initialize params
+  // TODO make vol a parameter too
   uint32_t vol = *adc_raw.Vol;
-  //uint32_t env = *adc_raw.Trim1;
-  // TODO rename this adc parameter
-  //uint32_t phase = *adc_raw.Shape;
-
-  struct Param rate  = param_init(adc_raw.Rate, RATE_ARR_MIN, RATE_ARR_MAX, 0, ADC_RESOLUTION, 1);
-  struct Param depth = param_init(adc_raw.Depth, 0, 1, 0, ADC_RESOLUTION, 0);
-  struct Param offset = param_init(adc_raw.Offset, 0, 1, 0, ADC_RESOLUTION, 0);
-  struct Param phase = param_init(adc_raw.Shape, 0, 1, 0, ADC_RESOLUTION, 0);
+  // TODO use macros for min/max values
+  // TODO move to function / clean up. Globals?
+  struct Param rate  = param_init(adc_raw.Rate, map_rate_log,
+		  RATE_ARR_MIN, RATE_ARR_MAX, 0, ADC_RESOLUTION, 1);
+  struct Param depth = param_init(adc_raw.Depth, map_param_lin,
+		  0, 1, 0, ADC_RESOLUTION, 0);
+  struct Param offset = param_init(adc_raw.Offset,  map_param_lin,
+		  0, 1, 0, ADC_RESOLUTION, 0);
+  struct Param phase = param_init(adc_raw.Shape,  map_param_lin,
+		  0, 1, 0, ADC_RESOLUTION, 0);
 
   /* USER CODE END Init */
 
@@ -270,7 +271,7 @@ int main(void)
 
 	  // Read inputs
 	  // TODO move inputs to another file
-	  set_rate(rate.map_val(&rate));
+	  set_rate(rate.map_func(&rate));
 	  set_volume(vol);
 	  set_phase(&state_phase, &LED_tap);
 	  set_shape(&shape);
@@ -292,9 +293,9 @@ int main(void)
 
 	  // Generate wavetable
 	  wavetable_gen(shape,
-			  depth.map_val(&depth),
-			  offset.map_val(&offset),
-			  phase.map_val(&phase),
+			  depth.map_func(&depth),
+			  offset.map_func(&offset),
+			  phase.map_func(&phase),
 			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
 	  // TODO move this to a function

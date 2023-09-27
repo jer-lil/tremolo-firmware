@@ -62,6 +62,14 @@ typedef enum {
 	EVENT_PAN,
 } EventPhase;
 
+struct params {
+	struct Param rate;
+	struct Param depth;
+	struct Param offset;
+	struct Param phase;
+	struct Param vol;
+} ;
+
 
 
 /* USER CODE END PTD */
@@ -79,8 +87,6 @@ typedef enum {
 
 /* USER CODE BEGIN PV */
 
-LED LED_bypass;
-LED LED_tap;
 
 /* USER CODE END PV */
 
@@ -88,18 +94,16 @@ LED LED_tap;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
-void generate_triangle_wave_fixedpoint(uint32_t, uint32_t);
-void generate_triangle_wave_floatingpoint(uint32_t, uint32_t);
 
 void init_adc_channels(Adc*, uint32_t[]);
 void init_LEDs(LED*, LED*);
-void set_lfo_polarity();
 void set_volume(uint16_t);
 void set_rate(float);
 void set_phase(StatePhase*, LED*);
 void set_shape(Shape*);
 void sm_phase(StatePhase*, EventPhase, LED*);
+void start_dma();
+void start_pwm_oc();
 uint32_t env_map(uint32_t);
 
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
@@ -112,9 +116,15 @@ void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 /* USER CODE BEGIN 0 */
 
 uint32_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
+Adc adc_raw;
 
 uint16_t dma_wavetable_a[WAVETABLE_WIDTH] = {0};
 uint16_t dma_wavetable_b[WAVETABLE_WIDTH] = {0};
+
+LED LED_bypass;
+LED LED_tap;
+
+
 
 /* USER CODE END 0 */
 
@@ -142,50 +152,6 @@ int main(void)
   StatePhase state_phase = STATE_STD;
   Shape shape = ERR;
 
-  init_LEDs(&LED_bypass, &LED_tap);
-
-  Adc adc_raw;
-  init_adc_channels(&adc_raw, adc_array);
-
-  // Initialize Parameters
-  // TODO make vol a parameter too
-  uint32_t vol = *adc_raw.Vol;
-  // TODO use macros for min/max values
-  // TODO move to function / clean up. Globals?
-  struct Param rate = {
-		  .val = adc_raw.Rate,
-		  .map_func = map_rate_pseudo_log,
-		  .val_min = 0,
-		  .val_max = ADC_RESOLUTION,
-		  .map_min = RATE_ARR_MIN,
-		  .map_max = RATE_ARR_MAX
-  };
-  struct Param depth = {
-		  .val = adc_raw.Depth,
-		  .map_func = map_param_lin,
-		  .val_min = 0,
-		  .val_max = ADC_RESOLUTION,
-		  .map_min = 0,
-		  .map_max = 1
-  };
-  struct Param offset = {
-  		  .val = adc_raw.Depth,
-  		  .map_func = map_param_lin,
-  		  .val_min = 0,
-  		  .val_max = ADC_RESOLUTION,
-  		  .map_min = 0,
-  		  .map_max = 1
-    };
-  struct Param phase = {
-  		  .val = adc_raw.Depth,
-  		  .map_func = map_param_lin,
-  		  .val_min = 0,
-  		  .val_max = ADC_RESOLUTION,
-  		  .map_min = 0,
-  		  .map_max = 1
-    };
-
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -207,79 +173,68 @@ int main(void)
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
-  // TODO clean up and move to function
-  if (HAL_ADC_Start_DMA(&hadc1, adc_array,
-		  ADC_DMA_BUF_LENGTH) != HAL_OK)
-  {
-	  Error_Handler();
-  }
+  init_LEDs(&LED_bypass, &LED_tap);
+  init_adc_channels(&adc_raw, adc_array);
+  start_dma();
+  start_pwm_oc();
 
-  // Start PWM for Volume outputs
-  if ((HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) |
-	  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-
-
-  // Start PWM output for PWM timers (the ones that actually output the LFOs)
-  if ((HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-  // Link Transfer complete callback to DMA handle:
-  hdma_tim8_ch1.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch1.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch2.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch2.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch3_up.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch3_up.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch4_trig_com.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch4_trig_com.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-
-  // First just setting all 4 channels synced to same wavetable
-  // TODO figure out best way to have different phases per channel
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
-  HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-
-  // Start output compare for waveform timers (to update the wavetables)
-  if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-/*
-  // Enable transfer complete interrupts
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_TC);
-  // Enable transfer half complete interrupts
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
-*/
-
-
+  // Initialize Parameters
+  // TODO use macros for min/max values
+  // TODO move to function / clean up. Globals?
+  struct Param rate = {
+  		  .val = adc_raw.Rate,
+  		  .map_func = map_rate_pseudo_log,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = RATE_ARR_MIN,
+  		  .map_max = RATE_ARR_MAX,
+		  .invert = 1
+  };
+  struct Param depth = {
+  		  .val = adc_raw.Depth,
+  		  .map_func = map_param_lin,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = 0,
+  		  .map_max = 1,
+		  .invert = 0
+  };
+  struct Param offset = {
+    		  .val = adc_raw.Offset,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
+  struct Param phase = {
+    		  .val = adc_raw.Shape,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
+  struct Param vol = {
+    		  .val = adc_raw.Vol,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = VOL_MAP_MIN,
+    		  .map_max = VOL_MAP_MAX,
+			  .invert = 1
+  };
+  struct Param sense = {
+    		  .val = adc_raw.Subdiv,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
 
   /* USER CODE END 2 */
 
@@ -290,14 +245,13 @@ int main(void)
 	  //rate = *adc_raw.Rate;
 	  //depth = *adc_raw.Depth;
 	  //offset = *adc_raw.Offset;
-	  vol = *adc_raw.Vol;
 	  //env = *adc_raw.Trim1;
 	  //phase = *adc_raw.Shape;
 
 	  // Read inputs
 	  // TODO move inputs to another file
 	  set_rate(rate.map_func(&rate));
-	  set_volume(vol);
+	  set_volume(vol.map_func(&vol));
 	  set_phase(&state_phase, &LED_tap);
 	  set_shape(&shape);
 
@@ -322,6 +276,7 @@ int main(void)
 			  offset.map_func(&offset),
 			  phase.map_func(&phase),
 			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+
 
 	  // TODO move this to a function
 	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
@@ -405,6 +360,92 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+
+void start_dma()
+{
+	if (HAL_ADC_Start_DMA(&hadc1, adc_array, ADC_DMA_BUF_LENGTH) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
+	// Link Transfer complete callback to DMA handle:
+	hdma_tim8_ch1.XferCpltCallback = My_DMA_XferCpltCallback;
+	hdma_tim8_ch1.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	hdma_tim8_ch2.XferCpltCallback = My_DMA_XferCpltCallback;
+	hdma_tim8_ch2.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	hdma_tim8_ch3_up.XferCpltCallback = My_DMA_XferCpltCallback;
+	hdma_tim8_ch3_up.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	hdma_tim8_ch4_trig_com.XferCpltCallback = My_DMA_XferCpltCallback;
+	hdma_tim8_ch4_trig_com.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+
+	// First just setting all 4 channels synced to same wavetable
+	// TODO figure out best way to have different phases per channel
+	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
+	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
+	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
+	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
+	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
+	HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+
+	/*
+	  // Enable transfer complete interrupts
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_TC);
+	  // Enable transfer half complete interrupts
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
+	*/
+
+	return;
+}
+
+void start_pwm_oc()
+{
+	// Start PWM for Volume outputs
+	if ((HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) |
+		  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	// Start PWM output for PWM timers (the ones that actually output the LFOs)
+	if ((HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) |
+			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2) |
+			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) |
+			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	// Start output compare for waveform timers (to update the wavetables)
+	if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
+		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
+		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
+		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	return;
+}
+
+void init_params()
+{
+
+
+
+
+
+
+}
 
 // This maps named Adc struct members to the DMA buffer for convenience
 void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){

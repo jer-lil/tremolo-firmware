@@ -120,6 +120,9 @@ void set_volume(float);
 
 void update_lfo_waveform(Shape, float, float, float);
 
+// DEBUG
+void transmit_wavetable();
+
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
@@ -198,7 +201,7 @@ int main(void)
   start_dma();
   start_pwm_oc();
 
-  //start_uart();
+  start_uart();
 
   // Initialize Parameters
   // TODO use macros for min/max values
@@ -279,7 +282,7 @@ int main(void)
 	  //env = *adc_raw.Trim1;
 	  //phase = *adc_raw.Shape;
 
-	  uint8_t uart_data = 79;
+
 
 	  // Read inputs
 	  // TODO do I want a get function for ADC inputs?
@@ -297,7 +300,8 @@ int main(void)
 			  offset.map_func(&offset),
 			  phase.map_func(&phase));
 
-	  HAL_StatusTypeDef uart_status = HAL_UART_Transmit(&HUART, &uart_data, 1, 1000);
+	  transmit_wavetable();
+
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -489,11 +493,7 @@ void start_uart()
 	}
 	/*##-2- Start the transmission process #####################################*/
 	/* User start transmission data through "TxBuffer" buffer */
-	if(HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable_a_hi, WAVETABLE_WIDTH)!= HAL_OK)
-	{
-		/* Transfer error in transmission process */
-		Error_Handler();
-	}
+
 
 	/*
 	///##-3- Put UART peripheral in reception process ###########################
@@ -659,6 +659,49 @@ void update_lfo_waveform(Shape shape, float depth, float offset,
 	wavetable_gen(shape, depth,offset, phases[3],
 				  wavetable_b_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 	return;
+}
+
+void transmit_wavetables()
+{
+	static int index = 0;
+
+
+}
+
+/*
+ * Debug & UART Stuff
+ */
+
+void transmit_wavetable(uint16_t wavetable[WAVETABLE_WIDTH], uint8_t table_index)
+{
+	uint8_t uart_start[4] = {0x01, 0x0A, 0x0A, 0x02};
+
+	HAL_StatusTypeDef hal_status;
+	hal_status = HAL_UART_Transmit(&HUART, uart_start, sizeof(uart_start), 1);
+	if (hal_status != HAL_OK)
+	{
+		if (hal_status == HAL_ERROR)
+		{
+			Error_Handler();
+		}
+		else
+		{
+			return;
+		}
+	}
+
+	hal_status = HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable, WAVETABLE_WIDTH*2);
+	if (hal_status != HAL_OK)
+	{
+		if (hal_status == HAL_ERROR)
+		{
+			Error_Handler();
+		}
+		else
+		{
+			return;
+		}
+	}
 }
 
 /*

@@ -121,7 +121,8 @@ void set_volume(float);
 void update_lfo_waveform(Shape, float, float, float);
 
 // DEBUG
-void transmit_wavetable();
+void transmit_wavetables();
+void transmit_wavetable(uint16_t[], uint8_t);
 
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
@@ -300,7 +301,7 @@ int main(void)
 			  offset.map_func(&offset),
 			  phase.map_func(&phase));
 
-	  transmit_wavetable();
+	  transmit_wavetables();
 
 
 	  // Check for bypass switch state and run state machine
@@ -661,16 +662,46 @@ void update_lfo_waveform(Shape shape, float depth, float offset,
 	return;
 }
 
+void transmit_wavetables()
+{
+	static int index = 0;
+
+	if (HUART.gState == HAL_UART_STATE_READY)
+	{
+		switch (index)
+		{
+			case 0:
+				transmit_wavetable(wavetable_a_lo, 0);
+				break;
+			case 1:
+				transmit_wavetable(wavetable_a_hi, 1);
+				break;
+			case 2:
+				transmit_wavetable(wavetable_b_lo, 2);
+				break;
+			case 3:
+				transmit_wavetable(wavetable_b_hi, 3);
+				break;
+			default:
+				break;
+		}
+		index = (index + 1) % 4;
+	}
+
+	return;
+
+}
+
 /*
  * Debug & UART Stuff
  */
 
-void transmit_wavetable()
+void transmit_wavetable(uint16_t wavetable[WAVETABLE_WIDTH], uint8_t table_index)
 {
-	uint8_t uart_start = 0x00;
+	uint8_t uart_start[5] = {0x01, 0x0D, 0x0A, table_index, 0x02};
 
 	HAL_StatusTypeDef hal_status;
-	hal_status = HAL_UART_Transmit(&HUART, &uart_start, sizeof(uart_start), 1);
+	hal_status = HAL_UART_Transmit(&HUART, uart_start, sizeof(uart_start), 1);
 	if (hal_status != HAL_OK)
 	{
 		if (hal_status == HAL_ERROR)
@@ -683,7 +714,7 @@ void transmit_wavetable()
 		}
 	}
 
-	hal_status = HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable_a_hi, WAVETABLE_WIDTH);
+	hal_status = HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable, WAVETABLE_WIDTH*2);
 	if (hal_status != HAL_OK)
 	{
 		if (hal_status == HAL_ERROR)

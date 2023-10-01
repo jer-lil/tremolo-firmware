@@ -28,7 +28,6 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim8;
-DMA_HandleTypeDef hdma_tim4_ch2;
 DMA_HandleTypeDef hdma_tim8_ch1;
 DMA_HandleTypeDef hdma_tim8_ch2;
 DMA_HandleTypeDef hdma_tim8_ch3_up;
@@ -341,23 +340,6 @@ void HAL_TIM_IC_MspInit(TIM_HandleTypeDef* tim_icHandle)
     GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
     HAL_GPIO_Init(pDIN_TAP_EXT_GPIO_Port, &GPIO_InitStruct);
 
-    /* TIM4 DMA Init */
-    /* TIM4_CH2 Init */
-    hdma_tim4_ch2.Instance = DMA1_Channel4;
-    hdma_tim4_ch2.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_tim4_ch2.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_tim4_ch2.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_tim4_ch2.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_tim4_ch2.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-    hdma_tim4_ch2.Init.Mode = DMA_CIRCULAR;
-    hdma_tim4_ch2.Init.Priority = DMA_PRIORITY_MEDIUM;
-    if (HAL_DMA_Init(&hdma_tim4_ch2) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    __HAL_LINKDMA(tim_icHandle,hdma[TIM_DMA_ID_CC2],hdma_tim4_ch2);
-
     /* TIM4 interrupt Init */
     HAL_NVIC_SetPriority(TIM4_IRQn, 6, 0);
     HAL_NVIC_EnableIRQ(TIM4_IRQn);
@@ -574,9 +556,6 @@ void HAL_TIM_IC_MspDeInit(TIM_HandleTypeDef* tim_icHandle)
     HAL_GPIO_DeInit(GPIOA, pDIN_BYP_Pin|pDIN_TAP_Pin);
 
     HAL_GPIO_DeInit(pDIN_TAP_EXT_GPIO_Port, pDIN_TAP_EXT_Pin);
-
-    /* TIM4 DMA DeInit */
-    HAL_DMA_DeInit(tim_icHandle->hdma[TIM_DMA_ID_CC2]);
 
     /* TIM4 interrupt Deinit */
     HAL_NVIC_DisableIRQ(TIM4_IRQn);

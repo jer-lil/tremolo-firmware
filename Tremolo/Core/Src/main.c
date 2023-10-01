@@ -99,26 +99,24 @@ struct subdiv {
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-// GETTERS
+// INIT FUNCTIONS
+void init_adc_channels(Adc*, uint32_t[]);
+void init_LEDs(LED*, LED*);
+void start_dma();
+void start_pwm_oc();
+
+// PARAM GETTERS
 void get_rate();
 EventPhase get_phase();
 Shape get_shape();
 struct subdiv get_subdiv();
 void get_volume();
 
-// SETTERS
+// PARAM SETTERS
 void set_rate(float, struct subdiv);
-void set_shape(Shape*);
-void set_phase(StatePhase*, EventPhase, LED*);
-
-void init_adc_channels(Adc*, uint32_t[]);
-void init_LEDs(LED*, LED*);
 void set_volume(float);
 
-void start_dma();
-void start_pwm_oc();
-uint32_t env_map(uint32_t);
-
+// CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 
@@ -401,29 +399,32 @@ void start_dma()
 	}
 
 	// Link Transfer complete callback to DMA handle:
-	hdma_tim8_ch1.XferCpltCallback = My_DMA_XferCpltCallback;
-	hdma_tim8_ch1.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-	hdma_tim8_ch2.XferCpltCallback = My_DMA_XferCpltCallback;
-	hdma_tim8_ch2.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-	hdma_tim8_ch3_up.XferCpltCallback = My_DMA_XferCpltCallback;
-	hdma_tim8_ch3_up.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-	hdma_tim8_ch4_trig_com.XferCpltCallback = My_DMA_XferCpltCallback;
-	hdma_tim8_ch4_trig_com.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_A_LO.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_A_LO.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_A_HI.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_A_HI.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_B_LO.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_B_LO.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_B_HI.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_B_HI.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
 
 	// First just setting all 4 channels synced to same wavetable
-	// TODO figure out best way to have different phases per channel
-	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
-	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
-	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
-	__HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
-	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
-	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
-	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
-	__HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
-	HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_A_LO, TIM_DMA_CC1);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_A_HI, TIM_DMA_CC2);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_B_LO, TIM_DMA_CC3);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_B_HI, TIM_DMA_CC4);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_A_LO, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_A_HI, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_LO, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_HI, DMA_IT_HT);
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_LO, (uint32_t)dma_wavetable_a,
+			(uint32_t)&DMA_DST_PWM_A_LO, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_HI, (uint32_t)dma_wavetable_b,
+			(uint32_t)&DMA_DST_PWM_A_HI, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_LO, (uint32_t)dma_wavetable_a,
+			(uint32_t)&DMA_DST_PWM_B_LO, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_HI, (uint32_t)dma_wavetable_b,
+			(uint32_t)&DMA_DST_PWM_B_HI, WAVETABLE_WIDTH);
 
 	/*
 	  // Enable transfer complete interrupts
@@ -444,24 +445,24 @@ void start_dma()
 void start_pwm_oc()
 {
 	// Start PWM for Volume outputs
-	if ((HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) |
-		  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2)) != HAL_OK)
+	if ((HAL_TIM_PWM_Start(&HTIM_VOL_A, TIM_CH_VOL_A) |
+		  HAL_TIM_PWM_Start(&HTIM_VOL_B, TIM_CH_VOL_B)) != HAL_OK)
 	{
 		Error_Handler();
 	}
 	// Start PWM output for PWM timers (the ones that actually output the LFOs)
-	if ((HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) |
-			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2) |
-			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) |
-			HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4)) != HAL_OK)
+	if ((HAL_TIM_PWM_Start(&HTIM_PWM_A_LO, TIM_CH_PWM_A_LO) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_A_HI, TIM_CH_PWM_A_HI) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_B_LO, TIM_CH_PWM_B_LO) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_B_HI, TIM_CH_PWM_B_HI)) != HAL_OK)
 	{
 		Error_Handler();
 	}
 	// Start output compare for waveform timers (to update the wavetables)
-	if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
-		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
-		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
-		HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
+	if ((HAL_TIM_OC_Start(&HTIM_WVFM_A_LO, TIM_CH_WVFM_A_LO) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_A_HI, TIM_CH_WVFM_A_HI) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_B_LO, TIM_CH_WVFM_B_LO) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_B_HI, TIM_CH_WVFM_B_HI)) != HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -568,113 +569,33 @@ void get_volume()
  * 	SET FUNCTIONS
  */
 
-
+/**
+ * @brief Sets timer registers based on rate & subdivision inputs
+ *
+ * Prescaler and ARR get set 4x for the sake of code portability.
+ * Could be made more efficient with some clever macros.
+ *
+ * @param rate Base quarter note LFO rate
+ * @param subdiv Note subdivision, e.g. quarter, eighth, triplet
+ */
 void set_rate(float rate, struct subdiv subdiv){
 	// Set prescaler based on subdiv
-	uint32_t prsclr = PWM_TIM_PRSCLR_BASE;
-	prsclr = QUARTER * prsclr * subdiv.num / subdiv.denom;
-	__HAL_TIM_SET_PRESCALER(&htim8, prsclr);
-
+	uint32_t prsclr = PWM_TIM_PRSCLR_BASE * QUARTER * subdiv.num / subdiv.denom;
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_LO, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_HI, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_LO, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_HI, prsclr);
 	// Set ARR based on rate
-	__HAL_TIM_SET_AUTORELOAD(&htim8, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_LO, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_HI, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_LO, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_HI, (uint32_t)rate);
 }
 
 void set_volume(float vol){
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint16_t)vol);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint16_t)vol);
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)vol);
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)vol);
 }
-
-
-// TODO this is a bad function.
-// -> Maybe can simplify by using a struct to reduce states
-void set_phase(StatePhase* state, EventPhase event, LED* LED_bypass){
-	switch (*state) {
-		case STATE_STD:
-			if (event == EVENT_HARM){
-				*state = STATE_HARM;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, GREEN);
-			}
-			else if (event == EVENT_PAN){
-				*state = STATE_PAN;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, BLUE);
-
-			}
-			break;
-		case STATE_HARM:
-			if (event == EVENT_STD){
-				*state = STATE_STD;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, RED);
-			}
-			else if (event == EVENT_PAN){
-				*state = STATE_PAN;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, BLUE);
-			}
-			break;
-		case STATE_PAN:
-			if (event == EVENT_STD){
-				*state = STATE_STD;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, RED);
-
-			}
-			else if (event == EVENT_HARM){
-				*state = STATE_HARM;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				set_LED_color(LED_bypass, GREEN);
-			}
-			break;
-
-		default:
-			break;
-	}
-}
-
 
 /*
  * CALLBACKS

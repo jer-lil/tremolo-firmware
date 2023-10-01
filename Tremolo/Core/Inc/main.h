@@ -174,6 +174,58 @@ void Error_Handler(void);
  *  Handle Assignment
  */
 
+extern TIM_HandleTypeDef htim2;
+
+extern TIM_HandleTypeDef htim3;
+
+extern TIM_HandleTypeDef htim4;
+
+extern TIM_HandleTypeDef htim8;
+
+// Volume pwm channels
+#define HTIM_VOL_A htim2
+#define TIM_CH_VOL_A TIM_CHANNEL_1
+#define HTIM_VOL_B htim2
+#define TIM_CH_VOL_B TIM_CHANNEL_2
+// LFO PWM timers
+#define HTIM_PWM_A_LO htim3
+#define TIM_CH_PWM_A_LO TIM_CHANNEL_1
+#define HTIM_PWM_A_HI htim3
+#define TIM_CH_PWM_A_HI TIM_CHANNEL_2
+#define HTIM_PWM_B_LO htim3
+#define TIM_CH_PWM_B_LO TIM_CHANNEL_3
+#define HTIM_PWM_B_HI htim3
+#define TIM_CH_PWM_B_HI TIM_CHANNEL_4
+
+// DMA destinations, where wavetable values are loaded into
+#define DMA_DST_PWM_A_LO (TIM3->CCR1)
+#define DMA_DST_PWM_A_HI (TIM3->CCR2)
+#define DMA_DST_PWM_B_LO (TIM3->CCR3)
+#define DMA_DST_PWM_B_HI (TIM3->CCR4)
+
+// LFO Waveform timers
+#define HTIM_WVFM_A_LO htim8
+#define TIM_CH_WVFM_A_LO TIM_CHANNEL_1
+#define HTIM_WVFM_A_HI htim8
+#define TIM_CH_WVFM_A_HI TIM_CHANNEL_2
+#define HTIM_WVFM_B_LO htim8
+#define TIM_CH_WVFM_B_LO TIM_CHANNEL_3
+#define HTIM_WVFM_B_HI htim8
+#define TIM_CH_WVFM_B_HI TIM_CHANNEL_4
+
+// Waveform timer DMA handles
+#define HDMA_WVFM_A_LO hdma_tim8_ch1
+#define HDMA_WVFM_A_HI hdma_tim8_ch2
+#define HDMA_WVFM_B_LO hdma_tim8_ch3_up
+#define HDMA_WVFM_B_HI hdma_tim8_ch4_trig_com
+// Waveform timer DMA trigger sources
+#define DMA_TRIG_WVFM_A_LO TIM_DMA_CC1
+#define DMA_TRIG_WVFM_A_HI TIM_DMA_CC2
+#define DMA_TRIG_WVFM_B_LO TIM_DMA_CC3
+#define DMA_TRIG_WVFM_B_HI TIM_DMA_CC4
+
+/* USER CODE BEGIN Private defines */
+
 
 /* USER CODE END Private defines */
 

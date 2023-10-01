@@ -147,6 +147,13 @@ void Error_Handler(void);
 #define WAVETABLE_DEPTH 1023
 #define ADC_RESOLUTION 1023
 
+// Base prescaler value with quarter note subdiv
+#define PWM_TIM_PRSCLR_BASE 24
+// Used for prescaler normalization to quarter notes
+#define QUARTER 4
+#define TRIPLET 6
+#define EIGHTH 8
+
 // TODO define these programmatically based on min/max LFO rates
 #define RATE_ARR_MIN 256
 #define RATE_ARR_MAX 1024
@@ -163,8 +170,9 @@ void Error_Handler(void);
 /* Toggle heartbeat LED every 500ms */
 #define HEARTBEAT_MS 500
 
-// for fixed point math
-#define SHIFT_AMOUNT 16;
+/*
+ *  Handle Assignment
+ */
 
 
 /* USER CODE END Private defines */

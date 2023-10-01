@@ -70,6 +70,11 @@ struct params {
 	struct Param vol;
 } ;
 
+struct subdiv {
+	uint32_t num;
+	uint32_t denom;
+};
+
 
 
 /* USER CODE END PTD */
@@ -94,14 +99,22 @@ struct params {
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+// GETTERS
+void get_rate();
+EventPhase get_phase();
+Shape get_shape();
+struct subdiv get_subdiv();
+void get_volume();
+
+// SETTERS
+void set_rate(float, struct subdiv);
+void set_shape(Shape*);
+void set_phase(StatePhase*, EventPhase, LED*);
 
 void init_adc_channels(Adc*, uint32_t[]);
 void init_LEDs(LED*, LED*);
-void set_volume(uint16_t);
-void set_rate(float);
-void set_phase(StatePhase*, LED*);
-void set_shape(Shape*);
-void sm_phase(StatePhase*, EventPhase, LED*);
+void set_volume(float);
+
 void start_dma();
 void start_pwm_oc();
 uint32_t env_map(uint32_t);
@@ -149,8 +162,11 @@ int main(void)
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
+  // TODO get rid of the event/state dichotomy. Copy what Shape does.
   StatePhase state_phase = STATE_STD;
+  EventPhase phase_sw = EVENT_STD;
   Shape shape = ERR;
+  struct subdiv subdiv = {.num = 1, .denom = 4};
 
   /* USER CODE END Init */
 
@@ -235,6 +251,15 @@ int main(void)
     		  .map_max = 1,
 			  .invert = 0
   };
+  struct Param env = {
+    		  .val = adc_raw.Trim1,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
 
   /* USER CODE END 2 */
 
@@ -249,13 +274,24 @@ int main(void)
 	  //phase = *adc_raw.Shape;
 
 	  // Read inputs
-	  // TODO move inputs to another file
-	  set_rate(rate.map_func(&rate));
+	  // TODO do I want a get function for ADC inputs?
+	  get_rate();
+	  subdiv = get_subdiv();
+	  get_volume();
+	  shape = get_shape();
+	  // Set things based on parameters
+	  set_rate(rate.map_func(&rate), subdiv);
 	  set_volume(vol.map_func(&vol));
-	  set_phase(&state_phase, &LED_tap);
-	  set_shape(&shape);
+	  // Generate wavetable
+	  wavetable_gen(shape,
+			  depth.map_func(&depth),
+			  offset.map_func(&offset),
+			  phase.map_func(&phase),
+			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+
 
 	  // Check for bypass switch state and run state machine
+	  // TODO make this cleaner
 	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
 	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
 		  event_bypass_sw = EVENT_PRESSED;
@@ -268,14 +304,6 @@ int main(void)
 	  }
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
-
-
-	  // Generate wavetable
-	  wavetable_gen(shape,
-			  depth.map_func(&depth),
-			  offset.map_func(&offset),
-			  phase.map_func(&phase),
-			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
 
 	  // TODO move this to a function
@@ -361,6 +389,9 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/*
+ * 	INIT/START FUNCTIONS
+ */
 
 void start_dma()
 {
@@ -439,12 +470,7 @@ void start_pwm_oc()
 
 void init_params()
 {
-
-
-
-
-
-
+	return;
 }
 
 // This maps named Adc struct members to the DMA buffer for convenience
@@ -472,42 +498,96 @@ void init_LEDs(LED* LED_bypass, LED* LED_tap){
 			pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
 }
 
-// TODO move to another file
-// TODO see if these can be genericised
-void set_phase(StatePhase* state, LED* LED_bypass){
+/*
+ * 	GET FUNCTIONS
+ */
+
+
+// Set things based on parameters
+
+void get_rate()
+{
+	return;
+}
+
+struct subdiv get_subdiv()
+{
+	struct subdiv subdiv;
+	uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
+			  pDIN_HARM_MODE_1_Pin);
+	uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
+			  pDIN_HARM_MODE_2_Pin);
+	if (!ph_left)
+	{
+		subdiv.num = 1;
+		subdiv.denom = QUARTER;
+	}
+	else if (!ph_right)
+	{
+		subdiv.num = 1;
+		subdiv.denom = EIGHTH;
+	}
+	else
+	{
+		subdiv.num = 1;
+		subdiv.denom = TRIPLET;
+	}
+	return subdiv;
+}
+
+// No longer used, this is a knob now
+EventPhase get_phase(StatePhase* state, LED* LED_bypass){
 	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
 			  pDIN_HARM_MODE_1_Pin);
 	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
 			  pDIN_HARM_MODE_2_Pin);
-	  if (!ph_left){sm_phase(state, EVENT_PAN, LED_bypass);}
-	  else if (!ph_right){sm_phase(state, EVENT_HARM, LED_bypass);}
-	  else {sm_phase(state, EVENT_STD, LED_bypass);}
+	  if (!ph_left){ return EVENT_PAN; }
+	  else if (!ph_right){ return EVENT_HARM; }
+	  else { return EVENT_STD; }
 }
 
-void set_shape(Shape* shape)
+
+Shape get_shape()
 {
 	uint32_t right = HAL_GPIO_ReadPin(pDIN_PAN_MODE_1_GPIO_Port,
 			pDIN_PAN_MODE_1_Pin);
 	uint32_t left = HAL_GPIO_ReadPin(pDIN_PAN_MODE_2_GPIO_Port,
 			pDIN_PAN_MODE_2_Pin);
-	if (!left) {*shape=SINE; }
-	else if (!right) { *shape = SQUR; }
-	else { *shape = TRI; }
+	if (!left) { return SINE; }
+	else if (!right) { return SQUR; }
+	else { return TRI; }
 }
 
-uint32_t env_map(uint32_t env)
+void get_volume()
 {
-	// Cap env at ENV_MAX just in case it goes over
-	if (env > ENV_MAX){
-		env = ENV_MAX;
-	}
-	float fl_env = (float)env;
-	return (uint32_t)(fl_env * (ADC_RESOLUTION) / ENV_MAX);
+	return;
 }
+
+
+/*
+ * 	SET FUNCTIONS
+ */
+
+
+void set_rate(float rate, struct subdiv subdiv){
+	// Set prescaler based on subdiv
+	uint32_t prsclr = PWM_TIM_PRSCLR_BASE;
+	prsclr = QUARTER * prsclr * subdiv.num / subdiv.denom;
+	__HAL_TIM_SET_PRESCALER(&htim8, prsclr);
+
+	// Set ARR based on rate
+	__HAL_TIM_SET_AUTORELOAD(&htim8, (uint32_t)rate);
+}
+
+void set_volume(float vol){
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint16_t)vol);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint16_t)vol);
+}
+
 
 // TODO this is a bad function.
 // -> Maybe can simplify by using a struct to reduce states
-void sm_phase(StatePhase* state, EventPhase event, LED* LED_bypass){
+void set_phase(StatePhase* state, EventPhase event, LED* LED_bypass){
 	switch (*state) {
 		case STATE_STD:
 			if (event == EVENT_HARM){
@@ -595,19 +675,10 @@ void sm_phase(StatePhase* state, EventPhase event, LED* LED_bypass){
 	}
 }
 
-void set_volume(uint16_t vol){
-	float fl_vol = (float)(ADC_RESOLUTION - vol);
-	float fl_vol_map = fl_vol * (VOL_MAP_MAX - VOL_MAP_MIN) / ADC_RESOLUTION;
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint16_t)fl_vol_map);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint16_t)fl_vol_map);
-}
 
-// TODO implement with tap and external sync
-// TODO add subdivision
-void set_rate(float rate){
-	//__HAL_TIM_SET_PRESCALER(&htim8, (uint32_t)rate);
-	__HAL_TIM_SET_AUTORELOAD(&htim8, (uint32_t)rate);
-}
+/*
+ * CALLBACKS
+ */
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {

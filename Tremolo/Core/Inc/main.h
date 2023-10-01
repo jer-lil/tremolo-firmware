@@ -29,10 +29,6 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f3xx_hal.h"
 
-#include <stdint.h>
-#include <math.h>
-
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -178,13 +174,6 @@ void Error_Handler(void);
  *  Handle Assignment
  */
 
-extern TIM_HandleTypeDef htim2;
-
-extern TIM_HandleTypeDef htim3;
-
-extern TIM_HandleTypeDef htim4;
-
-extern TIM_HandleTypeDef htim8;
 
 // Volume pwm channels
 #define HTIM_VOL_A htim2
@@ -227,6 +216,11 @@ extern TIM_HandleTypeDef htim8;
 #define DMA_TRIG_WVFM_A_HI TIM_DMA_CC2
 #define DMA_TRIG_WVFM_B_LO TIM_DMA_CC3
 #define DMA_TRIG_WVFM_B_HI TIM_DMA_CC4
+
+// UART Handles
+#define HUART huart1
+
+
 
 /* USER CODE BEGIN Private defines */
 

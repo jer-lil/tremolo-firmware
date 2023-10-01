@@ -32,6 +32,7 @@
 #include "lib/wavetable_gen.h"
 #include "lib/param.h"
 
+#include <math.h>
 
 /* USER CODE END Includes */
 
@@ -104,6 +105,7 @@ void init_adc_channels(Adc*, uint32_t[]);
 void init_LEDs(LED*, LED*);
 void start_dma();
 void start_pwm_oc();
+void start_uart();
 
 // PARAM GETTERS
 void get_rate();
@@ -117,6 +119,9 @@ void set_rate(float, struct subdiv);
 void set_volume(float);
 
 void update_lfo_waveform(Shape, float, float, float);
+
+// DEBUG
+void transmit_wavetable();
 
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
@@ -156,7 +161,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-   HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -195,6 +200,8 @@ int main(void)
   init_adc_channels(&adc_raw, adc_array);
   start_dma();
   start_pwm_oc();
+
+  start_uart();
 
   // Initialize Parameters
   // TODO use macros for min/max values
@@ -275,6 +282,8 @@ int main(void)
 	  //env = *adc_raw.Trim1;
 	  //phase = *adc_raw.Shape;
 
+
+
 	  // Read inputs
 	  // TODO do I want a get function for ADC inputs?
 	  get_rate();
@@ -290,6 +299,9 @@ int main(void)
 			  depth.map_func(&depth),
 			  offset.map_func(&offset),
 			  phase.map_func(&phase));
+
+	  transmit_wavetable();
+
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -472,6 +484,27 @@ void start_pwm_oc()
 	return;
 }
 
+void start_uart()
+{
+	if(HAL_UART_Init(&HUART) != HAL_OK)
+	{
+		/* Initialization Error */
+		Error_Handler();
+	}
+	/*##-2- Start the transmission process #####################################*/
+	/* User start transmission data through "TxBuffer" buffer */
+
+
+	/*
+	///##-3- Put UART peripheral in reception process ###########################
+	if(HAL_UART_Receive_DMA(&HUART, (uint8_t *)aRxBuffer, RXBUFFERSIZE) != HAL_OK)
+	{
+		//
+		Error_Handler();
+	}
+	*/
+}
+
 void init_params()
 {
 	return;
@@ -626,6 +659,42 @@ void update_lfo_waveform(Shape shape, float depth, float offset,
 	wavetable_gen(shape, depth,offset, phases[3],
 				  wavetable_b_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 	return;
+}
+
+/*
+ * Debug & UART Stuff
+ */
+
+void transmit_wavetable()
+{
+	uint8_t uart_start = 0x00;
+
+	HAL_StatusTypeDef hal_status;
+	hal_status = HAL_UART_Transmit(&HUART, &uart_start, sizeof(uart_start), 1);
+	if (hal_status != HAL_OK)
+	{
+		if (hal_status == HAL_ERROR)
+		{
+			Error_Handler();
+		}
+		else
+		{
+			return;
+		}
+	}
+
+	hal_status = HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable_a_hi, WAVETABLE_WIDTH);
+	if (hal_status != HAL_OK)
+	{
+		if (hal_status == HAL_ERROR)
+		{
+			Error_Handler();
+		}
+		else
+		{
+			return;
+		}
+	}
 }
 
 /*

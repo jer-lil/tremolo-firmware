@@ -28,6 +28,11 @@
 /* USER CODE BEGIN Includes */
 
 #include "lib/sm_bypass.h"
+#include "lib/led.h"
+#include "lib/wavetable_gen.h"
+#include "lib/param.h"
+
+#include <math.h>
 
 /* USER CODE END Includes */
 
@@ -58,6 +63,19 @@ typedef enum {
 	EVENT_PAN,
 } EventPhase;
 
+struct params {
+	struct Param rate;
+	struct Param depth;
+	struct Param offset;
+	struct Param phase;
+	struct Param vol;
+} ;
+
+struct subdiv {
+	uint32_t num;
+	uint32_t denom;
+};
+
 
 
 /* USER CODE END PTD */
@@ -75,23 +93,34 @@ typedef enum {
 
 /* USER CODE BEGIN PV */
 
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-void led_toggle_tick(uint32_t, GPIO_TypeDef*, uint16_t);
-void generate_triangle_wave_fixedpoint(uint32_t, uint32_t);
-void generate_triangle_wave_floatingpoint(uint32_t, uint32_t);
-
+// INIT FUNCTIONS
 void init_adc_channels(Adc*, uint32_t[]);
-void set_lfo_polarity();
-void set_volume(uint16_t);
-void set_rate(uint16_t);
-void set_phase(StatePhase*);
-void sm_phase(StatePhase*, EventPhase);
+void init_LEDs(LED*, LED*);
+void start_dma();
+void start_pwm_oc();
+void start_uart();
 
+// PARAM GETTERS
+void get_rate();
+EventPhase get_phase();
+Shape get_shape();
+struct subdiv get_subdiv();
+void get_volume();
+
+// PARAM SETTERS
+void set_rate(float, struct subdiv);
+void set_volume(float);
+
+void update_lfo_waveform(Shape, float, float, float);
+
+// CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 
@@ -102,9 +131,17 @@ void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 /* USER CODE BEGIN 0 */
 
 uint32_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
+Adc adc_raw;
 
-uint16_t dma_wavetable_a[WAVETABLE_WIDTH] = {0};
-uint16_t dma_wavetable_b[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_a_lo[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_a_hi[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_b_lo[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
+
+LED LED_bypass;
+LED LED_tap;
+
+
 
 /* USER CODE END 0 */
 
@@ -129,11 +166,11 @@ int main(void)
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
+  // TODO get rid of the event/state dichotomy. Copy what Shape does.
   StatePhase state_phase = STATE_STD;
-  //StatePhase state_phase = STATE_MONO;
-  //StateHarm state_harm = STATE_STANDARD;
-
-  Adc adc_raw;
+  EventPhase phase_sw = EVENT_STD;
+  Shape shape = ERR;
+  struct subdiv subdiv = {.num = 1, .denom = 4};
 
   /* USER CODE END Init */
 
@@ -150,85 +187,85 @@ int main(void)
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   MX_TIM4_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
 
-  // Map named Adc members to DMA buffer array
+  init_LEDs(&LED_bypass, &LED_tap);
   init_adc_channels(&adc_raw, adc_array);
+  start_dma();
+  start_pwm_oc();
 
-  // TODO clean up and move to function
-  if (HAL_ADC_Start_DMA(&hadc1, adc_array,
-		  ADC_DMA_BUF_LENGTH) != HAL_OK)
-  {
-	  Error_Handler();
-  }
+  //start_uart();
 
-  // Start PWM for Volume outputs
-  if ((HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1) |
-	  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-
-
-  // Start PWM output for PWM timers (the ones that actually output the LFOs)
-  if ((HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) |
-	  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-  // Link Transfer complete callback to DMA handle:
-  hdma_tim8_ch1.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch1.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch2.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch2.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch3_up.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch3_up.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-  hdma_tim8_ch4_trig_com.XferCpltCallback = My_DMA_XferCpltCallback;
-  hdma_tim8_ch4_trig_com.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
-
-  // First just setting all 4 channels synced to same wavetable
-  // TODO figure out best way to have different phases per channel
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC1);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC2);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC3);
-  __HAL_TIM_ENABLE_DMA(&htim8, TIM_DMA_CC4);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
-  HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-  HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-
-  // Start output compare for waveform timers (to update the wavetables)
-  if ((HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_1) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_3) |
-	  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_4)) != HAL_OK)
-  {
-	  Error_Handler();
-  }
-
-/*
-  // Enable transfer complete interrupts
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_TC);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_TC);
-  // Enable transfer half complete interrupts
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
-  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
-*/
+  // Initialize Parameters
+  // TODO use macros for min/max values
+  // TODO move to function / clean up. Globals?
+  struct Param rate = {
+  		  .val = adc_raw.Rate,
+  		  .map_func = map_rate_pseudo_log,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = RATE_ARR_MIN,
+  		  .map_max = RATE_ARR_MAX,
+		  .invert = 1
+  };
+  struct Param depth = {
+  		  .val = adc_raw.Vol,
+  		  .map_func = map_param_lin,
+  		  .val_min = 0,
+  		  .val_max = ADC_RESOLUTION,
+  		  .map_min = 0,
+  		  .map_max = 1,
+		  .invert = 0
+  };
+  struct Param offset = {
+    		  .val = adc_raw.Offset,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
+  struct Param phase = {
+    		  .val = adc_raw.Shape,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
+  struct Param vol = {
+    		  .val = adc_raw.Depth,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = VOL_MAP_MIN,
+    		  .map_max = VOL_MAP_MAX,
+			  .invert = 1
+  };
+  struct Param sense = {
+    		  .val = adc_raw.Subdiv,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
+  struct Param env = {
+    		  .val = adc_raw.Trim1,
+    		  .map_func = map_param_lin,
+    		  .val_min = 0,
+    		  .val_max = ADC_RESOLUTION,
+    		  .map_min = 0,
+    		  .map_max = 1,
+			  .invert = 0
+  };
 
   /* USER CODE END 2 */
 
@@ -236,10 +273,34 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  // Toggle heartbeat LED
-	  //led_toggle_tick(HEARTBEAT_MS, pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin);
+	  //rate = *adc_raw.Rate;
+	  //depth = *adc_raw.Depth;
+	  //offset = *adc_raw.Offset;
+	  //env = *adc_raw.Trim1;
+	  //phase = *adc_raw.Shape;
+
+	  uint8_t uart_data = 79;
+
+	  // Read inputs
+	  // TODO do I want a get function for ADC inputs?
+	  get_rate();
+	  subdiv = get_subdiv();
+	  get_volume();
+	  shape = get_shape();
+	  // Set things based on parameters
+	  set_rate(rate.map_func(&rate), subdiv);
+	  set_volume(vol.map_func(&vol));
+	  // Generate wavetable
+	  // TODO change function to take in multiple wavetables
+	  update_lfo_waveform(shape,
+			  depth.map_func(&depth),
+			  offset.map_func(&offset),
+			  phase.map_func(&phase));
+
+	  HAL_StatusTypeDef uart_status = HAL_UART_Transmit(&HUART, &uart_data, 1, 1000);
 
 	  // Check for bypass switch state and run state machine
+	  // TODO make this cleaner
 	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
 	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
 		  event_bypass_sw = EVENT_PRESSED;
@@ -251,21 +312,30 @@ int main(void)
 		  event_relay_mute = EVENT_EFFECT;
 	  }
 
-	  sm_relay_mute(&state_relay_mute, event_relay_mute);
+	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
 
-	  // Generate new triangle wave based on latest depth input
-	  generate_triangle_wave_floatingpoint(*adc_raw.Depth, *adc_raw.Offset);
 
-	  // Set parameters based on control inputs
-	  set_rate(*adc_raw.Rate);
-	  set_volume(*adc_raw.Vol);
-	  set_phase(&state_phase);
+	  // TODO move this to a function
+	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
+			  pDIN_ENV_MODE_1_Pin)){
+		  // Toggle to left, envelope controls Rate
+		  rate.map_max = ENV_MAX;
+		  rate.val = adc_raw.Trim1;
+		  set_LED_color(&LED_bypass, RED);
+	  }
+	  else if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_2_GPIO_Port,
+			  pDIN_ENV_MODE_2_Pin)){
+		  // Toggle to right, envelope controls Depth
+		  // TODO reconcile uint and float differences
+		  //depth.map_max = ENV_MAX;
+		  //depth.val = adc_raw.Trim1;
+		  set_LED_color(&LED_bypass, BLUE);
+	  }
+	  else {
+		  // Toggle in middle, no envelope control
+		  set_LED_color(&LED_bypass, GREEN);
+	  }
 
-	  /* XXX: DEBUGGING CODE START */
-	  // Toggle red LED 2 to measure loop time
-	  //HAL_GPIO_TogglePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin);
-
-	  /* XXX: DEBUGGING CODE END */
 
   }
     /* USER CODE END WHILE */
@@ -328,6 +398,118 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/*
+ * 	INIT/START FUNCTIONS
+ */
+
+void start_dma()
+{
+	if (HAL_ADC_Start_DMA(&hadc1, adc_array, ADC_DMA_BUF_LENGTH) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
+	// Link Transfer complete callback to DMA handle:
+	HDMA_WVFM_A_LO.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_A_LO.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_A_HI.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_A_HI.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_B_LO.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_B_LO.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+	HDMA_WVFM_B_HI.XferCpltCallback = My_DMA_XferCpltCallback;
+	HDMA_WVFM_B_HI.XferHalfCpltCallback = My_DMA_XferHalfCpltCallback;
+
+	// First just setting all 4 channels synced to same wavetable
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_A_LO, TIM_DMA_CC1);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_A_HI, TIM_DMA_CC2);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_B_LO, TIM_DMA_CC3);
+	__HAL_TIM_ENABLE_DMA(&HTIM_WVFM_B_HI, TIM_DMA_CC4);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_A_LO, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_A_HI, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_LO, DMA_IT_HT);
+	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_HI, DMA_IT_HT);
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_LO, (uint32_t)wavetable_a_lo,
+			(uint32_t)&DMA_DST_PWM_A_LO, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_HI, (uint32_t)wavetable_a_hi,
+			(uint32_t)&DMA_DST_PWM_A_HI, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_LO, (uint32_t)wavetable_b_lo,
+			(uint32_t)&DMA_DST_PWM_B_LO, WAVETABLE_WIDTH);
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_HI, (uint32_t)wavetable_b_hi,
+			(uint32_t)&DMA_DST_PWM_B_HI, WAVETABLE_WIDTH);
+
+	/*
+	  // Enable transfer complete interrupts
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_TC);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_TC);
+	  // Enable transfer half complete interrupts
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch1, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch2, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch3_up, DMA_IT_HT);
+	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
+	*/
+
+	return;
+}
+
+void start_pwm_oc()
+{
+	// Start PWM for Volume outputs
+	if ((HAL_TIM_PWM_Start(&HTIM_VOL_A, TIM_CH_VOL_A) |
+		  HAL_TIM_PWM_Start(&HTIM_VOL_B, TIM_CH_VOL_B)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	// Start PWM output for PWM timers (the ones that actually output the LFOs)
+	if ((HAL_TIM_PWM_Start(&HTIM_PWM_A_LO, TIM_CH_PWM_A_LO) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_A_HI, TIM_CH_PWM_A_HI) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_B_LO, TIM_CH_PWM_B_LO) |
+			HAL_TIM_PWM_Start(&HTIM_PWM_B_HI, TIM_CH_PWM_B_HI)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	// Start output compare for waveform timers (to update the wavetables)
+	if ((HAL_TIM_OC_Start(&HTIM_WVFM_A_LO, TIM_CH_WVFM_A_LO) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_A_HI, TIM_CH_WVFM_A_HI) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_B_LO, TIM_CH_WVFM_B_LO) |
+		HAL_TIM_OC_Start(&HTIM_WVFM_B_HI, TIM_CH_WVFM_B_HI)) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	return;
+}
+
+void start_uart()
+{
+	if(HAL_UART_Init(&HUART) != HAL_OK)
+	{
+		/* Initialization Error */
+		Error_Handler();
+	}
+	/*##-2- Start the transmission process #####################################*/
+	/* User start transmission data through "TxBuffer" buffer */
+	if(HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable_a_hi, WAVETABLE_WIDTH)!= HAL_OK)
+	{
+		/* Transfer error in transmission process */
+		Error_Handler();
+	}
+
+	/*
+	///##-3- Put UART peripheral in reception process ###########################
+	if(HAL_UART_Receive_DMA(&HUART, (uint8_t *)aRxBuffer, RXBUFFERSIZE) != HAL_OK)
+	{
+		//
+		Error_Handler();
+	}
+	*/
+}
+
+void init_params()
+{
+	return;
+}
+
 // This maps named Adc struct members to the DMA buffer for convenience
 void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 	adc->Rate = &adc_buffer[0];
@@ -341,217 +523,147 @@ void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 	adc->Vol = &adc_buffer[8];
 }
 
-void set_phase(StatePhase* state){
-	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
+// Initialize LEDs with GPIO ports/pins, and set default states
+void init_LEDs(LED* LED_bypass, LED* LED_tap){
+	initLED(LED_tap, GREEN, OFF,
+			pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin,
+			pDOUT_LED1_G_GPIO_Port, pDOUT_LED1_G_Pin,
+			pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin);
+	initLED(LED_bypass, GREEN, OFF,
+			pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin,
+			pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin,
+			pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
+}
+
+/*
+ * 	GET FUNCTIONS
+ */
+
+
+// Set things based on parameters
+
+void get_rate()
+{
+	return;
+}
+
+struct subdiv get_subdiv()
+{
+	struct subdiv subdiv;
+	uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
 			  pDIN_HARM_MODE_1_Pin);
-	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
+	uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
 			  pDIN_HARM_MODE_2_Pin);
-	  if (!ph_left){sm_phase(state, EVENT_PAN);}
-	  else if (!ph_right){sm_phase(state, EVENT_HARM);}
-	  else {sm_phase(state, EVENT_STD);}
-}
-
-void sm_phase(StatePhase* state, EventPhase event){
-	switch (*state) {
-		case STATE_STD:
-			if (event == EVENT_HARM){
-				*state = STATE_HARM;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
-			}
-			else if (event == EVENT_PAN){
-				*state = STATE_PAN;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
-			}
-
-			break;
-		case STATE_HARM:
-			if (event == EVENT_STD){
-				*state = STATE_STD;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
-			}
-			else if (event == EVENT_PAN){
-				*state = STATE_PAN;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_SET);
-			}
-			break;
-		case STATE_PAN:
-			if (event == EVENT_STD){
-				*state = STATE_STD;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
-			}
-			else if (event == EVENT_HARM){
-				*state = STATE_HARM;
-				HAL_DMA_Abort(&hdma_tim8_ch1);
-				HAL_DMA_Start_IT(&hdma_tim8_ch1, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR1), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch2);
-				HAL_DMA_Start_IT(&hdma_tim8_ch2, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR2), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch3_up);
-				HAL_DMA_Start_IT(&hdma_tim8_ch3_up, (uint32_t)dma_wavetable_b, (uint32_t)&(TIM3->CCR3), WAVETABLE_WIDTH);
-				HAL_DMA_Abort(&hdma_tim8_ch4_trig_com);
-				HAL_DMA_Start_IT(&hdma_tim8_ch4_trig_com, (uint32_t)dma_wavetable_a, (uint32_t)&(TIM3->CCR4), WAVETABLE_WIDTH);
-				HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
-				HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, LED_PIN_SET);
-				HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, LED_PIN_RESET);
-			}
-			break;
-
-		default:
-
-			break;
+	if (!ph_left)
+	{
+		subdiv.num = 1;
+		subdiv.denom = QUARTER;
 	}
-}
-
-
-void set_volume(uint16_t vol){
-	float fl_vol = (float)(ADC_RESOLUTION - vol);
-	float fl_vol_map = fl_vol * (VOL_MAP_MAX - VOL_MAP_MIN) / ADC_RESOLUTION;
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, (uint16_t)fl_vol_map);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, (uint16_t)fl_vol_map);
-}
-
-// TODO implement with tap and external sync
-// TODO add subdivision
-void set_rate(uint16_t rate_knob){
-	float fl_rate = (float)(ADC_RESOLUTION - rate_knob);
-	float fl_rate_arr = fl_rate * (RATE_ARR_MAX - RATE_ARR_MIN) / ADC_RESOLUTION;
-	uint16_t rate_arr = (uint16_t)fl_rate_arr;
-	__HAL_TIM_SET_PRESCALER(&htim8, rate_arr);
-}
-
-/* Toggles LED if it's been longer than timout_ms since last toggle*/
-void led_toggle_tick(uint32_t timeout_ms, GPIO_TypeDef* LED_Port, uint16_t LED_Pin){
-	static uint32_t last_toggle_ms = 0;
-	uint32_t tick = HAL_GetTick();
-
-	if (tick - last_toggle_ms >= timeout_ms){
-		last_toggle_ms = tick;
-		HAL_GPIO_TogglePin(LED_Port, LED_Pin);
-
+	else if (!ph_right)
+	{
+		subdiv.num = 1;
+		subdiv.denom = EIGHTH;
 	}
+	else
+	{
+		subdiv.num = 1;
+		subdiv.denom = TRIPLET;
+	}
+	return subdiv;
+}
+
+// No longer used, this is a knob now
+EventPhase get_phase(StatePhase* state, LED* LED_bypass){
+	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
+			  pDIN_HARM_MODE_1_Pin);
+	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
+			  pDIN_HARM_MODE_2_Pin);
+	  if (!ph_left){ return EVENT_PAN; }
+	  else if (!ph_right){ return EVENT_HARM; }
+	  else { return EVENT_STD; }
+}
+
+float* get_phases(float phase)
+{
+	static float phases[4];
+	phases[0] = 0;
+	phases[1] = phase;
+	phases[2] = fmin(0.5, phase);
+	phases[3] = fmax(0, phase-0.5);
+	return &phases;
+}
+
+
+Shape get_shape()
+{
+	uint32_t right = HAL_GPIO_ReadPin(pDIN_PAN_MODE_1_GPIO_Port,
+			pDIN_PAN_MODE_1_Pin);
+	uint32_t left = HAL_GPIO_ReadPin(pDIN_PAN_MODE_2_GPIO_Port,
+			pDIN_PAN_MODE_2_Pin);
+	if (!left) { return SINE; }
+	else if (!right) { return SQUR; }
+	else { return TRI; }
+}
+
+void get_volume()
+{
+	return;
+}
+
+
+/*
+ * 	SET FUNCTIONS
+ */
+
+/**
+ * @brief Sets timer registers based on rate & subdivision inputs
+ *
+ * Prescaler and ARR get set 4x for the sake of code portability.
+ * Could be made more efficient with some clever macros.
+ *
+ * @param rate Base quarter note LFO rate
+ * @param subdiv Note subdivision, e.g. quarter, eighth, triplet
+ */
+void set_rate(float rate, struct subdiv subdiv){
+	// Set prescaler based on subdiv
+	uint32_t prsclr = PWM_TIM_PRSCLR_BASE * QUARTER * subdiv.num / subdiv.denom;
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_LO, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_HI, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_LO, prsclr);
+	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_HI, prsclr);
+	// Set ARR based on rate
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_LO, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_HI, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_LO, (uint32_t)rate);
+	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_HI, (uint32_t)rate);
+}
+
+void set_volume(float vol){
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)vol);
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)vol);
+}
+
+void update_lfo_waveform(Shape shape, float depth, float offset,
+		float phase)
+{
+	// Derive 4x phase offsets from single phase input
+	float* phases = get_phases(phase);
+
+	// TODO make this function take in array of tables/phases
+	wavetable_gen(shape, depth,offset, phases[0],
+				  wavetable_a_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[1],
+				  wavetable_a_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[2],
+				  wavetable_b_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[3],
+				  wavetable_b_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 	return;
 }
 
 /*
-void generate_triangle_wave_fixedpoint(uint32_t depth, uint32_t offset){
-	uint32_t f_depth = depth << SHIFT_AMOUNT;
-	uint32_t f_max = (WAVETABLE_DEPTH - 128) << SHIFT_AMOUNT;
-	uint32_t f_min = (WAVETABLE_DEPTH - depth) << SHIFT_AMOUNT;
-	uint32_t f_step_up;
-	if (offset > 0){
-		f_step_up = f_depth / offset;
-	}
-	else{
-		f_step_up = f_max;
-	}
-	uint32_t f_step_down = f_depth / (WAVETABLE_WIDTH-offset);
-	uint32_t f_val = f_min;
-	//uint32_t val;
-
-	for (int i=0; i<offset; i++){
-		//val = f_val >> SHIFT_AMOUNT;
-		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_SET);
-		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_SET);
-		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
-		//HAL_GPIO_WritePin(pDOUT_LED2_G_GPIO_Port, pDOUT_LED2_G_Pin, GPIO_PIN_RESET);
-		f_val = f_val+f_step_up;
-		//HAL_GPIO_WritePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin, GPIO_PIN_RESET);
-	}
-
-	f_val = f_max;
-	dma_wavetable[offset] = f_val >> SHIFT_AMOUNT;
-
-	for (int i=offset+1; i<WAVETABLE_WIDTH; i++){
-		//val = f_val >> SHIFT_AMOUNT;
-		dma_wavetable[i] = f_val >> SHIFT_AMOUNT;
-		f_val = f_val-f_step_down;
-	}
-	return;
-}
-*/
-
-void generate_triangle_wave_floatingpoint(uint32_t depth, uint32_t offset)
-{
-	float fl_depth = (float)depth;
-	float fl_offset = (float) offset;
-	float fl_max = WAVETABLE_DEPTH;
-	float fl_min = WAVETABLE_DEPTH - fl_depth;
-	// Step up is initialized later only if offset != 0
-	float fl_step_up;
-	float fl_step_down = fl_depth / (WAVETABLE_WIDTH-fl_offset);
-	float fl_val = fl_min;
-
-	uint16_t j = WAVETABLE_WIDTH>>1;
-
-	if (offset > 0){
-		fl_step_up = fl_depth / fl_offset;
-		for (int i=0; i<offset; i++){
-			dma_wavetable_a[i] = (uint16_t)fl_val;
-			j = (j + 1) % (WAVETABLE_WIDTH);
-			dma_wavetable_b[j] = (uint16_t)fl_val;
-			fl_val = fl_val+fl_step_up;
-		}
-	}
-
-	// Always want value at offset index to be max value
-	fl_val = fl_max;
-	for (int i=offset; i<WAVETABLE_WIDTH; i++){
-		dma_wavetable_a[i] = (uint16_t)fl_val;
-		j = (j + 1) % (WAVETABLE_WIDTH);
-		dma_wavetable_b[j] = (uint16_t)fl_val;
-		fl_val = fl_val-fl_step_down;
-	}
-	return;
-}
+ * CALLBACKS
+ */
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
@@ -565,22 +677,16 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef *hdma)
 {
-	if (hdma == &hdma_tim8_ch1){
-		HAL_GPIO_WritePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin,
-			LED_PIN_RESET);
-	}
+	// TODO don't call function from interrupt
+	set_LED_state(&LED_tap, OFF);
 	return;
 }
 
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
 {
-	if (hdma == &hdma_tim8_ch1){
-		HAL_GPIO_WritePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin,
-				LED_PIN_SET);
-	}
+	set_LED_state(&LED_tap, ON);
 	return;
 }
-
 
 
 /* USER CODE END 4 */

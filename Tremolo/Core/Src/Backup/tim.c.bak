@@ -218,7 +218,7 @@ void MX_TIM8_Init(void)
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim8.Init.Period = 1023;
-  htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV2;
+  htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_OC_Init(&htim8) != HAL_OK)

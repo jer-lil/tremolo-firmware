@@ -116,6 +116,8 @@ void get_volume();
 void set_rate(float, struct subdiv);
 void set_volume(float);
 
+void update_lfo_waveform(Shape, float, float, float);
+
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
@@ -129,8 +131,10 @@ void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
 uint32_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
 Adc adc_raw;
 
-uint16_t dma_wavetable_a[WAVETABLE_WIDTH] = {0};
-uint16_t dma_wavetable_b[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_a_lo[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_a_hi[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_b_lo[WAVETABLE_WIDTH] = {0};
+uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
 
 LED LED_bypass;
 LED LED_tap;
@@ -152,7 +156,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+   HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -205,7 +209,7 @@ int main(void)
 		  .invert = 1
   };
   struct Param depth = {
-  		  .val = adc_raw.Depth,
+  		  .val = adc_raw.Vol,
   		  .map_func = map_param_lin,
   		  .val_min = 0,
   		  .val_max = ADC_RESOLUTION,
@@ -232,7 +236,7 @@ int main(void)
 			  .invert = 0
   };
   struct Param vol = {
-    		  .val = adc_raw.Vol,
+    		  .val = adc_raw.Depth,
     		  .map_func = map_param_lin,
     		  .val_min = 0,
     		  .val_max = ADC_RESOLUTION,
@@ -281,12 +285,11 @@ int main(void)
 	  set_rate(rate.map_func(&rate), subdiv);
 	  set_volume(vol.map_func(&vol));
 	  // Generate wavetable
-	  wavetable_gen(shape,
+	  // TODO change function to take in multiple wavetables
+	  update_lfo_waveform(shape,
 			  depth.map_func(&depth),
 			  offset.map_func(&offset),
-			  phase.map_func(&phase),
-			  dma_wavetable_a, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-
+			  phase.map_func(&phase));
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -417,13 +420,13 @@ void start_dma()
 	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_A_HI, DMA_IT_HT);
 	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_LO, DMA_IT_HT);
 	__HAL_DMA_ENABLE_IT(&HDMA_WVFM_B_HI, DMA_IT_HT);
-	HAL_DMA_Start_IT(&HDMA_WVFM_A_LO, (uint32_t)dma_wavetable_a,
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_LO, (uint32_t)wavetable_a_lo,
 			(uint32_t)&DMA_DST_PWM_A_LO, WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&HDMA_WVFM_A_HI, (uint32_t)dma_wavetable_b,
+	HAL_DMA_Start_IT(&HDMA_WVFM_A_HI, (uint32_t)wavetable_a_hi,
 			(uint32_t)&DMA_DST_PWM_A_HI, WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&HDMA_WVFM_B_LO, (uint32_t)dma_wavetable_a,
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_LO, (uint32_t)wavetable_b_lo,
 			(uint32_t)&DMA_DST_PWM_B_LO, WAVETABLE_WIDTH);
-	HAL_DMA_Start_IT(&HDMA_WVFM_B_HI, (uint32_t)dma_wavetable_b,
+	HAL_DMA_Start_IT(&HDMA_WVFM_B_HI, (uint32_t)wavetable_b_hi,
 			(uint32_t)&DMA_DST_PWM_B_HI, WAVETABLE_WIDTH);
 
 	/*
@@ -547,6 +550,16 @@ EventPhase get_phase(StatePhase* state, LED* LED_bypass){
 	  else { return EVENT_STD; }
 }
 
+float* get_phases(float phase)
+{
+	static float phases[4];
+	phases[0] = 0;
+	phases[1] = phase;
+	phases[2] = fmin(0.5, phase);
+	phases[3] = fmax(0, phase-0.5);
+	return &phases;
+}
+
 
 Shape get_shape()
 {
@@ -595,6 +608,24 @@ void set_rate(float rate, struct subdiv subdiv){
 void set_volume(float vol){
 	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)vol);
 	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)vol);
+}
+
+void update_lfo_waveform(Shape shape, float depth, float offset,
+		float phase)
+{
+	// Derive 4x phase offsets from single phase input
+	float* phases = get_phases(phase);
+
+	// TODO make this function take in array of tables/phases
+	wavetable_gen(shape, depth,offset, phases[0],
+				  wavetable_a_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[1],
+				  wavetable_a_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[2],
+				  wavetable_b_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	wavetable_gen(shape, depth,offset, phases[3],
+				  wavetable_b_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
+	return;
 }
 
 /*

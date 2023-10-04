@@ -284,7 +284,6 @@ int main(void)
 	  //phase = *adc_raw.Shape;
 
 
-
 	  // Read inputs
 	  // TODO do I want a get function for ADC inputs?
 	  get_rate();

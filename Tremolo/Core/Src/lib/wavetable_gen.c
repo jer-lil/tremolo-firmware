@@ -41,46 +41,56 @@ void wavetable_gen(
 	uint16_t table_depth)
 {
 	// TODO bounds checking
-	// TODO any pre-calcs to do for all 3 shapes?
+
+	// TODO WIP moving some variable calcs to top level
+	// Starting index in the table; based on phase
+	uint16_t start_index = (uint16_t)(table_width-1)*phase;
+	// Midpoint_rel is where the triangle "peak" would be if phase=0
+	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
+	// Max value - min value; the actual depth of the table
+	float ampl = (float)depth*table_depth;
+
+
+
+
+
 	switch (shape)
 	{
 		case TRI:
-			wavetable_gen_tri(shape, depth, offset, phase,
+			wavetable_gen_tri(start_index, midpoint_rel, ampl,
 					table, table_width, table_depth);
 			break;
 		case SINE:
-			wavetable_gen_sine(shape, depth, offset, phase,
+			wavetable_gen_sine(start_index, midpoint_rel, ampl,
 					table, table_width, table_depth);
 			break;
 		case SQUR:
-			wavetable_gen_square(shape, depth, offset, phase,
+			wavetable_gen_square(start_index, midpoint_rel, ampl,
 					table, table_width, table_depth);
 			break;
 		default:
 			// TODO error
 			break;
 	}
+
+
+
 }
 
 void wavetable_gen_tri(
-	Shape shape,
-	float depth,
-	float offset,
-	float phase,
+	uint16_t start_index,
+	uint16_t midpoint_rel,
+	float ampl,
 	uint16_t* table,
 	uint16_t table_width,
 	uint16_t table_depth)
 {
-	// Starting index in the table; based on phase
-	uint16_t start_index = (uint16_t)(table_width-1)*phase;
-	// Midpoint_rel is where the triangle "peak" would be if phase=0
-	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
 	// midpoint_abs accounts for phase offset
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
 	// Val is the current table value; it starts at the lowest value
-	float val = (float)table_depth - ((float)table_depth*depth);
+	float val = (float)table_depth - ampl;
 	// The amount by which to increase/decrease val between entries
 	float step_up;
 	float step_down;
@@ -91,7 +101,7 @@ void wavetable_gen_tri(
 	// Rising slope of triangle. Skip if offset is all the way left.
 	if (midpoint_rel > 0)
 	{
-		step_up = (float)depth*table_depth / (float)midpoint_rel;
+		step_up = ampl / (float)midpoint_rel;
 		while (index != midpoint_abs)
 		{
 			val = val+step_up;
@@ -101,7 +111,7 @@ void wavetable_gen_tri(
 	}
 	// Falling slope of triangle. Skip if offset is all the way left.
 
-	step_down = (float)depth*table_depth / (float)(table_width-midpoint_rel);
+	step_down = ampl / (float)(table_width-midpoint_rel);
 	val = table_depth;
 	while (index!=start_index)
 	{
@@ -113,37 +123,68 @@ void wavetable_gen_tri(
 	return;
 }
 
+// TODO make this more efficient
+// TODO phase does not work
 void wavetable_gen_sine(
-	Shape shape,
-	float depth,
-	float offset,
-	float phase,
-	uint16_t* table,
-	uint16_t table_width,
-	uint16_t table_depth)
+		uint16_t start_index,
+		uint16_t midpoint_rel,
+		float ampl,
+		uint16_t* table,
+		uint16_t table_width,
+		uint16_t table_depth)
 {
+	// midpoint_abs accounts for phase offset
+	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
+	// Index is the current table index
+	uint16_t index = start_index;
+	// Val is the current table value; it starts at the max val for cosine
+	float val = (float)table_depth;
+	float ampl_div = ampl / 2;
+	uint16_t offset = (uint16_t)(table_depth - ampl_div);
+	// Effective period of the sine wave in counts
+	float period;
+
+	table[index] = (uint16_t)val;
+	index = (index + 1) % (table_width);
+
+	// Rising slope of sine. Skip if offset is all the way left.
+	if (midpoint_rel > 0)
+	{
+		period = 2 * midpoint_rel;
+		while (index != midpoint_abs)
+		{
+
+			table[index] =  (uint16_t)(offset + ampl_div *
+					cosf(2 * PI * ((float)index / (float)period)));
+			index = (index + 1) % (table_width);
+		}
+	}
+	// Second half of (co)sine
+	period = 2 * (table_width - midpoint_rel);
+	while (index!=start_index)
+	{
+		table[index] =  (uint16_t)(offset + ampl_div *
+				cosf(PI - (2 * PI * (((float)index - midpoint_rel) / (float)period))));
+		index = (index + 1) % (table_width);
+	}
+
 	return;
 }
 
 void wavetable_gen_square(
-	Shape shape,
-	float depth,
-	float offset,
-	float phase,
-	uint16_t* table,
-	uint16_t table_width,
-	uint16_t table_depth)
+		uint16_t start_index,
+		uint16_t midpoint_rel,
+		float ampl,
+		uint16_t* table,
+		uint16_t table_width,
+		uint16_t table_depth)
 {
-	// Starting index in the table; based on phase
-	uint16_t start_index = (uint16_t)(table_width-1)*phase;
-	// Midpoint_rel is where the triangle "peak" would be if phase=0
-	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
 	// midpoint_abs accounts for phase offset
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
 	// Val is the current table value; it starts at the lowest value
-	uint16_t low_val = table_depth - ((float)table_depth*depth);
+	uint16_t low_val = table_depth - ampl;
 	uint16_t high_val = table_depth;
 
 	table[index] = low_val;

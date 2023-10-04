@@ -9,7 +9,9 @@
 #define INC_LIB_WAVETABLE_GEN_H_
 
 #include <stdint.h>
+#include <math.h>
 
+#define PI 3.141592654
 
 /**
  * @brief Each value corresponds to an LFO wave shape
@@ -32,27 +34,24 @@ void wavetable_gen(
 	uint16_t);
 
 void wavetable_gen_tri(
-	Shape,
-	float,
-	float,
+	uint16_t,
+	uint16_t,
 	float,
 	uint16_t*,
 	uint16_t,
 	uint16_t);
 
 void wavetable_gen_sine(
-	Shape,
-	float,
-	float,
+	uint16_t,
+	uint16_t,
 	float,
 	uint16_t*,
 	uint16_t,
 	uint16_t);
 
 void wavetable_gen_square(
-	Shape,
-	float,
-	float,
+	uint16_t,
+	uint16_t,
 	float,
 	uint16_t*,
 	uint16_t,

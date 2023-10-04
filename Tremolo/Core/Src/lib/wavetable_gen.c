@@ -137,34 +137,59 @@ void wavetable_gen_sine(
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
-	// Val is the current table value; it starts at the max val for cosine
-	float val = (float)table_depth;
+	// Index relative to the start of the period.
+	uint16_t rel_index;
+
 	float ampl_div = ampl / 2;
 	uint16_t offset = (uint16_t)(table_depth - ampl_div);
 	// Effective period of the sine wave in counts
 	float period;
+	// Current index's fraction of the way through 1 period
+	float frac_period;
 
-	table[index] = (uint16_t)val;
+	// Always set first value to max
+	table[index] = (float)table_depth;
 	index = (index + 1) % (table_width);
 
-	// Rising slope of sine. Skip if offset is all the way left.
+	// First half, skip if offset is all the way left
 	if (midpoint_rel > 0)
 	{
-		period = 2 * midpoint_rel;
+		period = 2 * (float)midpoint_rel;
+
 		while (index != midpoint_abs)
 		{
-
+			rel_index = index - start_index;
+			if (index >= start_index)
+			{
+				rel_index = index - start_index;
+			}
+			if (index < start_index)
+			{
+				rel_index = index + (table_width - start_index);
+			}
+			frac_period = ((float)rel_index / period);
 			table[index] =  (uint16_t)(offset + ampl_div *
-					cosf(2 * PI * ((float)index / (float)period)));
+					cosf(2 * PI * frac_period ));
 			index = (index + 1) % (table_width);
 		}
 	}
 	// Second half of (co)sine
+
 	period = 2 * (table_width - midpoint_rel);
+
 	while (index!=start_index)
 	{
+		if (index >= midpoint_abs)
+		{
+			rel_index = index - midpoint_abs;
+		}
+		if (index < midpoint_abs)
+		{
+			rel_index = index + (table_width - midpoint_abs);
+		}
+		frac_period = ((float)rel_index / period);
 		table[index] =  (uint16_t)(offset + ampl_div *
-				cosf(PI - (2 * PI * (((float)index - midpoint_rel) / (float)period))));
+				cosf(PI + (2 * PI * frac_period)));
 		index = (index + 1) % (table_width);
 	}
 

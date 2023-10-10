@@ -21,6 +21,21 @@ LED defaultLED()
 	return led;
 }
 
+/**
+ * @brief Initializes LED object with GPIO pins/ports
+ *
+ * This feels a little hacky. Maybe I just wish I was using C++ though.
+ *
+ * @param led LED object to initialize
+ * @param color Color to initialize LED to
+ * @param on_state Initialize LED to either on or off
+ * @param PortRed
+ * @param PinRed
+ * @param PortGreen
+ * @param PinGreen
+ * @param PortBlue
+ * @param PinBlue
+ */
 void initLED(LED* led, LEDColor color, LEDOnState on_state,
 		GPIO_TypeDef* PortRed, uint16_t PinRed,
 		GPIO_TypeDef* PortGreen, uint16_t PinGreen,
@@ -40,9 +55,13 @@ void initLED(LED* led, LEDColor color, LEDOnState on_state,
 	set_LED_state(led, OFF);
 }
 
-/*
- *  Updates the color of the LED
- *  Only changes the GPIO state if the LED is already on
+/**
+ * @brief Updates the color of the LED
+ *
+ * Only changes the GPIO state if the LED is already on.
+ *
+ * @param led
+ * @param color
  */
 void set_LED_color(LED* led, LEDColor color){
 	led->Color = color;
@@ -52,8 +71,11 @@ void set_LED_color(LED* led, LEDColor color){
 	}
 }
 
-/*
- *  Updates LED on-state and sets GPIO pins to match
+/**
+ * @brief Updates LED on-state and sets GPIO pins to match
+ *
+ * @param led LED object to set state of
+ * @param on_state ON or OFF
  */
 void set_LED_state(LED* led, LEDOnState on_state){
 	led->OnState = on_state;
@@ -83,7 +105,6 @@ void set_LED_state(LED* led, LEDOnState on_state){
 		HAL_GPIO_WritePin(led->PortGreen, led->PinGreen, LED_PIN_RESET);
 		HAL_GPIO_WritePin(led->PortBlue, led->PinBlue, LED_PIN_RESET);
 	}
-
 }
 
 /* Toggles LED if it's been longer than timout_ms since last toggle

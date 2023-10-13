@@ -13,10 +13,6 @@
 
 #define PI 3.141592654
 
-/**
- * @brief Each value corresponds to an LFO wave shape
- *
- */
 typedef enum {
 	ERR = 0,
 	TRI = 1, /**< TRI */

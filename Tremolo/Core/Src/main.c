@@ -17,6 +17,13 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <Lib/led.h>
+#include <Lib/param.h>
+#include <Lib/sm_bypass.h>
+#include <Lib/wavetable_gen.h>
+#include <Tremolo/params.h>
+#include <Tremolo/debug.h>
+#include <Tremolo/tremolo.h>
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
@@ -26,11 +33,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
-#include "lib/sm_bypass.h"
-#include "lib/led.h"
-#include "lib/wavetable_gen.h"
-#include "lib/param.h"
 
 #include <math.h>
 
@@ -42,39 +44,14 @@
 typedef struct {
 	uint32_t *Rate;
 	uint32_t *Depth;
-	uint32_t *Shape;
+	uint32_t *Phase; // Formerly Shape
 	uint32_t *Offset;
-	uint32_t *Subdiv;
+	uint32_t *Sense; // Formerly Subdiv
 	uint32_t *Exp;
-	uint32_t *Trim1;
+	uint32_t *Env; // Formerly Trim1
 	uint32_t *Trim2;
 	uint32_t *Vol;
 } Adc;
-
-typedef enum {
-	STATE_STD,
-	STATE_HARM,
-	STATE_PAN,
-} StatePhase;
-
-typedef enum {
-	EVENT_STD,
-	EVENT_HARM,
-	EVENT_PAN,
-} EventPhase;
-
-struct params {
-	struct Param rate;
-	struct Param depth;
-	struct Param offset;
-	struct Param phase;
-	struct Param vol;
-} ;
-
-struct subdiv {
-	uint32_t num;
-	uint32_t denom;
-};
 
 
 
@@ -107,22 +84,6 @@ void start_dma();
 void start_pwm_oc();
 void start_uart();
 
-// PARAM GETTERS
-void get_rate();
-EventPhase get_phase();
-Shape get_shape();
-struct subdiv get_subdiv();
-void get_volume();
-
-// PARAM SETTERS
-void set_rate(float, struct subdiv);
-void set_volume(float);
-
-void update_lfo_waveform(Shape, float, float, float);
-
-// DEBUG
-void transmit_wavetables();
-void transmit_wavetable(uint16_t[], uint8_t);
 
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
@@ -141,6 +102,13 @@ uint16_t wavetable_a_lo[WAVETABLE_WIDTH] = {0};
 uint16_t wavetable_a_hi[WAVETABLE_WIDTH] = {0};
 uint16_t wavetable_b_lo[WAVETABLE_WIDTH] = {0};
 uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
+
+uint16_t* wavetables[4] = {
+		wavetable_a_lo,
+		wavetable_a_hi,
+		wavetable_b_lo,
+		wavetable_b_hi
+};
 
 LED LED_bypass;
 LED LED_tap;
@@ -166,15 +134,32 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
+  /*
+   * Parameters
+   */
+  // CONTINUOUS
+  float rate;
+  float depth;
+  float offset;
+  float phase;
+  float vol;
+  float sense;
+
+  float env;
+  float exp;
+  //float ramp_mag;
+  //float ramp_rate;
+
+  // DISCRETE
+  Shape shape = ERR;
+  struct subdiv subdiv = {.num = 1, .denom = 4};
+
   /* Iniitalize state machines */
   StateBypassSw state_bypass_sw = STATE_IDLE;
   StateEffect state_effect = STATE_BYPASS;
   StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
-  // TODO get rid of the event/state dichotomy. Copy what Shape does.
-  StatePhase state_phase = STATE_STD;
-  EventPhase phase_sw = EVENT_STD;
-  Shape shape = ERR;
-  struct subdiv subdiv = {.num = 1, .denom = 4};
+
+
 
   /* USER CODE END Init */
 
@@ -204,6 +189,7 @@ int main(void)
 
   start_uart();
 
+  /*
   // Initialize Parameters
   // TODO use macros for min/max values
   // TODO move to function / clean up. Globals?
@@ -270,6 +256,9 @@ int main(void)
     		  .map_max = 1,
 			  .invert = 0
   };
+  */
+
+
 
   /* USER CODE END 2 */
 
@@ -286,22 +275,25 @@ int main(void)
 
 	  // Read inputs
 	  // TODO do I want a get function for ADC inputs?
-	  get_rate();
+	  rate = get_rate(*adc_raw.Rate);
+	  depth = get_depth(*adc_raw.Depth);
+	  offset = get_offset(*adc_raw.Offset);
+	  phase = get_phase_knob(*adc_raw.Phase);
+	  env = get_env(*adc_raw.Env);
+	  exp = get_exp(*adc_raw.Exp);
+	  sense = get_sense(*adc_raw.Sense);
+	  vol = get_volume(*adc_raw.Vol);
 	  subdiv = get_subdiv();
-	  get_volume();
 	  shape = get_shape();
+
 	  // Set things based on parameters
-	  set_rate(rate.map_func(&rate), subdiv);
-	  set_volume(vol.map_func(&vol));
+	  set_rate(rate, subdiv);
+	  set_volume(vol);
 	  // Generate wavetable
 	  // TODO change function to take in multiple wavetables
-	  update_lfo_waveform(shape,
-			  depth.map_func(&depth),
-			  offset.map_func(&offset),
-			  phase.map_func(&phase));
-
-	  transmit_wavetables();
-
+	  update_lfo_waveform(wavetables, sizeof(wavetables), shape, depth, offset, phase);
+	  // Send wavetables over UART. Comment out if not needed.
+	  transmit_wavetables(&HUART, wavetables, sizeof(wavetables), WAVETABLE_WIDTH);
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -317,30 +309,6 @@ int main(void)
 	  }
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
-
-
-	  // TODO move this to a function
-	  if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_1_GPIO_Port,
-			  pDIN_ENV_MODE_1_Pin)){
-		  // Toggle to left, envelope controls Rate
-		  rate.map_max = ENV_MAX;
-		  rate.val = adc_raw.Trim1;
-		  set_LED_color(&LED_bypass, RED);
-	  }
-	  else if (!HAL_GPIO_ReadPin(pDIN_ENV_MODE_2_GPIO_Port,
-			  pDIN_ENV_MODE_2_Pin)){
-		  // Toggle to right, envelope controls Depth
-		  // TODO reconcile uint and float differences
-		  //depth.map_max = ENV_MAX;
-		  //depth.val = adc_raw.Trim1;
-		  set_LED_color(&LED_bypass, BLUE);
-	  }
-	  else {
-		  // Toggle in middle, no envelope control
-		  set_LED_color(&LED_bypass, GREEN);
-	  }
-
-
   }
     /* USER CODE END WHILE */
 
@@ -514,11 +482,11 @@ void init_params()
 void init_adc_channels(Adc *adc, uint32_t adc_buffer[]){
 	adc->Rate = &adc_buffer[0];
 	adc->Depth = &adc_buffer[1];
-	adc->Shape = &adc_buffer[2];
+	adc->Phase = &adc_buffer[2];
 	adc->Offset = &adc_buffer[3];
-	adc->Subdiv = &adc_buffer[4];
+	adc->Sense = &adc_buffer[4];
 	adc->Exp = &adc_buffer[5];
-	adc->Trim1 = &adc_buffer[6];
+	adc->Env = &adc_buffer[6];
 	adc->Trim2 = &adc_buffer[7];
 	adc->Vol = &adc_buffer[8];
 }
@@ -535,197 +503,9 @@ void init_LEDs(LED* LED_bypass, LED* LED_tap){
 			pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
 }
 
-/*
- * 	GET FUNCTIONS
- */
 
 
-// Set things based on parameters
 
-void get_rate()
-{
-	return;
-}
-
-struct subdiv get_subdiv()
-{
-	struct subdiv subdiv;
-	uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
-			  pDIN_HARM_MODE_1_Pin);
-	uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
-			  pDIN_HARM_MODE_2_Pin);
-	if (!ph_left)
-	{
-		subdiv.num = 1;
-		subdiv.denom = QUARTER;
-	}
-	else if (!ph_right)
-	{
-		subdiv.num = 1;
-		subdiv.denom = EIGHTH;
-	}
-	else
-	{
-		subdiv.num = 1;
-		subdiv.denom = TRIPLET;
-	}
-	return subdiv;
-}
-
-// No longer used, this is a knob now
-EventPhase get_phase(StatePhase* state, LED* LED_bypass){
-	  uint32_t ph_right = HAL_GPIO_ReadPin(pDIN_HARM_MODE_1_GPIO_Port,
-			  pDIN_HARM_MODE_1_Pin);
-	  uint32_t ph_left = HAL_GPIO_ReadPin(pDIN_HARM_MODE_2_GPIO_Port,
-			  pDIN_HARM_MODE_2_Pin);
-	  if (!ph_left){ return EVENT_PAN; }
-	  else if (!ph_right){ return EVENT_HARM; }
-	  else { return EVENT_STD; }
-}
-
-float* get_phases(float phase)
-{
-	static float phases[4];
-	phases[0] = 0;
-	phases[1] = phase;
-	phases[2] = fmin(0.5, phase);
-	phases[3] = fmax(0, phase-0.5);
-	return &phases;
-}
-
-
-Shape get_shape()
-{
-	uint32_t right = HAL_GPIO_ReadPin(pDIN_PAN_MODE_1_GPIO_Port,
-			pDIN_PAN_MODE_1_Pin);
-	uint32_t left = HAL_GPIO_ReadPin(pDIN_PAN_MODE_2_GPIO_Port,
-			pDIN_PAN_MODE_2_Pin);
-	if (!left) { return SINE; }
-	else if (!right) { return SQUR; }
-	else { return TRI; }
-}
-
-void get_volume()
-{
-	return;
-}
-
-
-/*
- * 	SET FUNCTIONS
- */
-
-/**
- * @brief Sets timer registers based on rate & subdivision inputs
- *
- * Prescaler and ARR get set 4x for the sake of code portability.
- * Could be made more efficient with some clever macros.
- *
- * @param rate Base quarter note LFO rate
- * @param subdiv Note subdivision, e.g. quarter, eighth, triplet
- */
-void set_rate(float rate, struct subdiv subdiv){
-	// Set prescaler based on subdiv
-	uint32_t prsclr = PWM_TIM_PRSCLR_BASE * QUARTER * subdiv.num / subdiv.denom;
-	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_LO, prsclr);
-	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_HI, prsclr);
-	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_LO, prsclr);
-	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_HI, prsclr);
-	// Set ARR based on rate
-	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_LO, (uint32_t)rate);
-	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_A_HI, (uint32_t)rate);
-	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_LO, (uint32_t)rate);
-	__HAL_TIM_SET_AUTORELOAD(&HTIM_WVFM_B_HI, (uint32_t)rate);
-}
-
-void set_volume(float vol){
-	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)vol);
-	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)vol);
-}
-
-void update_lfo_waveform(Shape shape, float depth, float offset,
-		float phase)
-{
-	// Derive 4x phase offsets from single phase input
-	float* phases = get_phases(phase);
-
-	// TODO make this function take in array of tables/phases
-	wavetable_gen(shape, depth,offset, phases[0],
-				  wavetable_a_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-	wavetable_gen(shape, depth,offset, phases[1],
-				  wavetable_a_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-	wavetable_gen(shape, depth,offset, phases[2],
-				  wavetable_b_lo, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-	wavetable_gen(shape, depth,offset, phases[3],
-				  wavetable_b_hi, WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-	return;
-}
-
-void transmit_wavetables()
-{
-	static int index = 0;
-
-	if (HUART.gState == HAL_UART_STATE_READY)
-	{
-		switch (index)
-		{
-			case 0:
-				transmit_wavetable(wavetable_a_lo, 0);
-				break;
-			case 1:
-				transmit_wavetable(wavetable_a_hi, 1);
-				break;
-			case 2:
-				transmit_wavetable(wavetable_b_lo, 2);
-				break;
-			case 3:
-				transmit_wavetable(wavetable_b_hi, 3);
-				break;
-			default:
-				break;
-		}
-		index = (index + 1) % 4;
-	}
-
-	return;
-
-}
-
-/*
- * Debug & UART Stuff
- */
-
-void transmit_wavetable(uint16_t wavetable[WAVETABLE_WIDTH], uint8_t table_index)
-{
-	uint8_t uart_start[5] = {0x01, 0x0D, 0x0A, table_index, 0x02};
-
-	HAL_StatusTypeDef hal_status;
-	hal_status = HAL_UART_Transmit(&HUART, uart_start, sizeof(uart_start), 1);
-	if (hal_status != HAL_OK)
-	{
-		if (hal_status == HAL_ERROR)
-		{
-			Error_Handler();
-		}
-		else
-		{
-			return;
-		}
-	}
-
-	hal_status = HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable, WAVETABLE_WIDTH*2);
-	if (hal_status != HAL_OK)
-	{
-		if (hal_status == HAL_ERROR)
-		{
-			Error_Handler();
-		}
-		else
-		{
-			return;
-		}
-	}
-}
 
 /*
  * CALLBACKS

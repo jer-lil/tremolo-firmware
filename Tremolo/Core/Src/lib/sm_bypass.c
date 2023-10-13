@@ -7,7 +7,7 @@
  *  TODO maybe can simplify by making a struct that contains states/events
  */
 
-#include "lib/sm_bypass.h"
+#include <Lib/sm_bypass.h>
 #include "stm32f3xx_hal.h"
 #include "main.h"
 

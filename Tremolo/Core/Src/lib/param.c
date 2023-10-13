@@ -5,9 +5,9 @@
  *      Author: jeremiah
  */
 
+#include <Lib/param.h>
 #include <math.h>
 
-#include <lib/param.h>
 
 
 struct Param param_init(

@@ -8,7 +8,7 @@
 #ifndef INC_LIB_SM_BYPASS_H_
 #define INC_LIB_SM_BYPASS_H_
 
-#include "lib/led.h"
+#include <Lib/led.h>
 
 typedef enum {
 	STATE_IDLE,

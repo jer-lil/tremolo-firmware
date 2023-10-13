@@ -8,7 +8,7 @@
  */
 
 
-#include <lib/wavetable_gen.h>
+#include <Lib/wavetable_gen.h>
 
 /**
  * @brief Generates a single wavetable
@@ -133,6 +133,12 @@ void wavetable_gen_sine(
 		uint16_t table_width,
 		uint16_t table_depth)
 {
+	// DEBUG
+	uint32_t tick_freq = HAL_GetTickFreq();
+	uint32_t tick1 = HAL_GetTick();
+	uint32_t tick2;
+	// END_DEBUG
+
 	// midpoint_abs accounts for phase offset
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
@@ -158,6 +164,9 @@ void wavetable_gen_sine(
 
 		while (index != midpoint_abs)
 		{
+			// DEBUG
+			tick2 = HAL_GetTick();
+			// END_DEBUG
 			rel_index = index - start_index;
 			if (index >= start_index)
 			{
@@ -179,6 +188,9 @@ void wavetable_gen_sine(
 
 	while (index!=start_index)
 	{
+		// DEBUG
+		tick2 = HAL_GetTick();
+		// END_DEBUG
 		if (index >= midpoint_abs)
 		{
 			rel_index = index - midpoint_abs;

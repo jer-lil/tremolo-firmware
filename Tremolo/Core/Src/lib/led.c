@@ -13,7 +13,7 @@
  *  TODO possibly implement dimmer functionality, would be pretty complex.
  */
 
-#include <lib/led.h>
+#include <Lib/led.h>
 
 LED defaultLED()
 {

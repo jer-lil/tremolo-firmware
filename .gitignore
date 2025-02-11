@@ -1,4 +1,5 @@
 *.o
 Debug/
 Debug/**
-Tremolo/.settings
+Tremolo/.settings/
+Tremolo/.settings/**

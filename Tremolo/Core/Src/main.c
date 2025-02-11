@@ -33,6 +33,7 @@
 #include "lib/param.h"
 
 #include <math.h>
+#include <stdbool.h>
 
 /* USER CODE END Includes */
 
@@ -105,7 +106,6 @@ void init_adc_channels(Adc*, uint32_t[]);
 void init_LEDs(LED*, LED*);
 void start_dma();
 void start_pwm_oc();
-void start_uart();
 
 // PARAM GETTERS
 void get_rate();
@@ -123,10 +123,12 @@ void update_lfo_waveform(Shape, float, float, float);
 // DEBUG
 void transmit_wavetables();
 void transmit_wavetable(uint16_t[], uint8_t);
+uint32_t num_transmissions = 0;
 
 // CALLBACKS
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef*);
+void My_USART_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 
 
 /* USER CODE END PFP */
@@ -203,8 +205,6 @@ int main(void)
   init_adc_channels(&adc_raw, adc_array);
   start_dma();
   start_pwm_oc();
-
-  start_uart();
 
   // Initialize Parameters
   // TODO use macros for min/max values
@@ -302,7 +302,7 @@ int main(void)
 			  offset.map_func(&offset),
 			  phase.map_func(&phase));
 
-	  transmit_wavetables();
+	  //transmit_wavetables();
 
 
 	  // Check for bypass switch state and run state machine
@@ -410,10 +410,13 @@ void SystemClock_Config(void)
 
 void start_dma()
 {
+	// ADC DMA
 	if (HAL_ADC_Start_DMA(&hadc1, adc_array, ADC_DMA_BUF_LENGTH) != HAL_OK)
 	{
 		Error_Handler();
 	}
+
+	// Wavetable DMA
 
 	// Link Transfer complete callback to DMA handle:
 	HDMA_WVFM_A_LO.XferCpltCallback = My_DMA_XferCpltCallback;
@@ -456,6 +459,9 @@ void start_dma()
 	  __HAL_DMA_ENABLE_IT(&hdma_tim8_ch4_trig_com, DMA_IT_HT);
 	*/
 
+	// USART DMA
+	HAL_UART_Transmit_DMA(&HUART, (uint8_t*)wavetable_a_lo, WAVETABLE_WIDTH);
+
 	return;
 }
 
@@ -484,27 +490,6 @@ void start_pwm_oc()
 		Error_Handler();
 	}
 	return;
-}
-
-void start_uart()
-{
-	if(HAL_UART_Init(&HUART) != HAL_OK)
-	{
-		/* Initialization Error */
-		Error_Handler();
-	}
-	/*##-2- Start the transmission process #####################################*/
-	/* User start transmission data through "TxBuffer" buffer */
-
-
-	/*
-	///##-3- Put UART peripheral in reception process ###########################
-	if(HAL_UART_Receive_DMA(&HUART, (uint8_t *)aRxBuffer, RXBUFFERSIZE) != HAL_OK)
-	{
-		//
-		Error_Handler();
-	}
-	*/
 }
 
 void init_params()
@@ -755,6 +740,66 @@ void My_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
 	set_LED_state(&LED_tap, ON);
 	return;
 }
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	// Debug
+
+	num_transmissions++;
+
+	// End debug
+
+	static uint8_t table_index = 0;
+	uint8_t preamble[5] = {0xAA, 0xAA, table_index, 0xAA, 0xAA};
+	uint8_t* current_table;
+	switch (table_index)
+	{
+		case 0:
+			current_table = (uint8_t*)wavetable_a_lo;
+			break;
+		case 1:
+			current_table = (uint8_t*)wavetable_a_hi;
+			break;
+		case 2:
+			current_table = (uint8_t*)wavetable_b_lo;
+			break;
+		case 3:
+			current_table = (uint8_t*)wavetable_b_hi;
+			break;
+		default:
+			break;
+	}
+
+
+	HAL_StatusTypeDef hal_status;
+	hal_status = HAL_UART_Transmit(huart, preamble, sizeof(preamble), 1);
+	if (hal_status != HAL_OK)
+	{
+		if (hal_status == HAL_ERROR)
+		{
+			Error_Handler();
+		}
+		else
+		{
+			return;
+		}
+	}
+	hal_status = HAL_UART_Transmit_DMA(huart, current_table, WAVETABLE_WIDTH*2);
+	if (hal_status != HAL_OK)
+		{
+			if (hal_status == HAL_ERROR)
+			{
+				Error_Handler();
+			}
+			else
+			{
+				return;
+			}
+		}
+	table_index = (table_index+1) % 4;
+	return;
+}
+
 
 
 /* USER CODE END 4 */

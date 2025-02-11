@@ -26,7 +26,6 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32f3xx_hal.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -220,6 +219,7 @@ void Error_Handler(void);
 
 // UART Handles
 #define HUART huart1
+#define HDMA_USART hdma_usart1_tx
 
 
 

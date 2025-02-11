@@ -6,22 +6,22 @@ serialPort = serial.Serial(
     port="COM5", 
     baudrate=1_000_000, 
     bytesize=8, 
-    timeout=2, 
+    timeout=10, 
     stopbits=serial.STOPBITS_ONE,
     parity=serial.PARITY_ODD
 )
 
 def get_next_table():
     # Read until start of frame
-    bytes_in = serialPort.read_until(b'\x01\x0D\x0A', 2100)
+    bytes_in = serialPort.read_until(b'\xAA\xAA', 2100)
     # Next byte is table index
     table_index = int.from_bytes(serialPort.read(1), "little", signed="False") 
     return table_index
 
 
 def get_data():
-    # Throw out start of text byte
-    serialPort.read(1)
+    # Throw out start of next 2 bytes
+    serialPort.read(2)
     # Read 2048 bytes
     bytes_in = serialPort.read(2048)
     ints_in = [int.from_bytes(bytes_in[i:i+2], "little", signed="False") for i in range(0, len(bytes_in), 2)]
@@ -31,7 +31,10 @@ def get_data():
 
 if __name__ == "__main__":
     x = np.linspace(0, 1023, 1024)
+    table_index = get_next_table()
+    print(table_index)
     y = get_data()
+    print(y)
     plt.ion()
     fig = plt.figure()
     fig.set_size_inches(8, 6)

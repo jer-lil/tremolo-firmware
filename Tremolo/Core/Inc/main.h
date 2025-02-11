@@ -139,6 +139,7 @@ void Error_Handler(void);
 #define pDIN_TAP_EXT_GPIO_Port GPIOB
 #define pDIN_HARM_MODE_1_Pin GPIO_PIN_9
 #define pDIN_HARM_MODE_1_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 #define TIM2_PERIOD 1023

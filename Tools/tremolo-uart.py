@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 serialPort = serial.Serial(
-    port="COM4", 
+    port="COM5", 
     baudrate=1_000_000, 
     bytesize=8, 
     timeout=2, 

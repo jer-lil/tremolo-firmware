@@ -139,6 +139,7 @@ void Error_Handler(void);
 #define pDIN_TAP_EXT_GPIO_Port GPIOB
 #define pDIN_HARM_MODE_1_Pin GPIO_PIN_9
 #define pDIN_HARM_MODE_1_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 #define TIM2_PERIOD 1023
@@ -146,6 +147,7 @@ void Error_Handler(void);
 #define WAVETABLE_WIDTH 1024
 #define WAVETABLE_DEPTH 1023
 #define ADC_RESOLUTION 1023
+#define ADC_DMA_BUF_LENGTH 9
 
 // Base prescaler value with quarter note subdiv
 #define PWM_TIM_PRSCLR_BASE 24
@@ -164,8 +166,6 @@ void Error_Handler(void);
 // 0-2.5V (about the max I've seen the circuit output)
 #define ENV_MIN 0
 #define ENV_MAX 775
-
-#define ADC_DMA_BUF_LENGTH 9
 
 /* Toggle heartbeat LED every 500ms */
 #define HEARTBEAT_MS 500
@@ -219,11 +219,7 @@ void Error_Handler(void);
 
 // UART Handles
 #define HUART huart1
-
-
-
-/* USER CODE BEGIN Private defines */
-
+#define HDMA_USART hdma_usart1_tx
 
 /* USER CODE END Private defines */
 

@@ -7,7 +7,7 @@
 
 #include <math.h>
 
-#include <lib/param.h>
+#include <Lib/param.h>
 
 
 struct Param param_init(

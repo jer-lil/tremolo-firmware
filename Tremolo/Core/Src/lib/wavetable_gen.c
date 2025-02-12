@@ -62,7 +62,7 @@ void wavetable_gen(
 					table, table_width, table_depth);
 			break;
 		case SINE:
-			wavetable_gen_sine(start_index, midpoint_rel, ampl,
+			wavetable_gen_sine_new(start_index, midpoint_rel, ampl,
 					table, table_width, table_depth);
 			break;
 		case SQUR:
@@ -119,6 +119,47 @@ void wavetable_gen_tri(
 	}
 
 	return;
+}
+
+void wavetable_gen_sine_new(
+		uint16_t start_index,
+		uint16_t midpoint_rel,
+		float ampl,
+		uint16_t* table,
+		uint16_t table_width,
+		uint16_t table_depth)
+{
+	// midpoint_abs accounts for phase offset
+	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
+	// dest_index is the current index in the destination table
+	uint16_t dest_index = start_index;
+	// current index in the source table (which is not the same size as the destination table)
+	float source_index = 0;
+	// amount to step through source table for each increment in dest table
+	// float because this will usually be a non-integer, rounded to the nearest int
+	float step_size = 0.5 * (((float)sineTableSize) / (float)midpoint_rel);
+
+	// First half, skip if offset is all the way left
+	if (midpoint_rel > 0)
+	{
+		while (dest_index != midpoint_abs)
+		{
+			// TODO add amplitude scaling
+			table[dest_index] = sineLookupTable[(uint16_t)source_index];
+			source_index += step_size;
+			dest_index = (dest_index + 1) % table_width;
+		}
+	}
+	// Change step size for second half of sine
+	step_size = 0.5 * ((float)sineTableSize) / (float)(table_width - midpoint_rel);
+	while (dest_index != start_index)
+	{
+		// TODO add amplitude scaling
+		table[dest_index] = sineLookupTable[(uint16_t)source_index];
+		source_index += step_size;
+		dest_index = (dest_index + 1) % table_width;
+	}
+
 }
 
 // TODO make this more efficient

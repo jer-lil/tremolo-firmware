@@ -34,6 +34,7 @@
 #include "Tremolo/tremolo.h"
 #include "Tremolo/params.h"
 
+#include <stdint.h>
 #include <math.h>
 #include <stdbool.h>
 
@@ -188,7 +189,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	  // Read inputs
 	  rate = get_rate(*adc_raw.Rate);
 	  depth = get_depth(*adc_raw.Depth);
@@ -213,7 +214,7 @@ int main(void)
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 3), wavetable_b_hi,
 				  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
-	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner

@@ -20,7 +20,7 @@ def get_next_table():
 
 def get_params():
     bytes_in = serialPort.read(16)
-    ints_in = [int.from_bytes(bytes_in[i:i+4], "little", signed="False") for i in range(0, len(bytes_in), 4)]
+    ints_in = [int.from_bytes(bytes_in[i:i+4], "little", signed="False") for i in range(0, len(bytes_in), 4   )]
     return ints_in
 
 
@@ -62,7 +62,6 @@ if __name__ == "__main__":
     while table_index != 3:
         table_index = get_next_table()
         params = get_params()
-        print(params)
         new_data = get_data()
     
     while 1:
@@ -70,7 +69,7 @@ if __name__ == "__main__":
         for i in range(4):
             table_index = get_next_table()
             params = get_params()
-            print(params)
+            #print(params)
             
             if table_index == 0:
                 new_data_a_lo = get_data()

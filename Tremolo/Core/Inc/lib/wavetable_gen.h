@@ -24,6 +24,9 @@ typedef enum {
 	SQUR = 3,/**< SQUR */
 } Shape;
 
+extern uint16_t sineLookupTable[4096];
+extern uint16_t sineTableSize;
+
 void wavetable_gen(
 	Shape,
 	float,
@@ -42,6 +45,14 @@ void wavetable_gen_tri(
 	uint16_t);
 
 void wavetable_gen_sine(
+	uint16_t,
+	uint16_t,
+	float,
+	uint16_t*,
+	uint16_t,
+	uint16_t);
+
+void wavetable_gen_sine_new(
 	uint16_t,
 	uint16_t,
 	float,

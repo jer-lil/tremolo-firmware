@@ -58,7 +58,16 @@ void Error_Handler(void);
 
 /* Private defines -----------------------------------------------------------*/
 #define TIM2_PERIOD 1023
+#define TIM16_PRSCLR 32
 #define TIM3_PERIOD 1023
+#define TIM2_PRSCLR 0
+#define TIM3_PRSCLR 0
+#define TIM3_CLK_DIV 0
+#define TIM4_PRSCLR 1023
+#define TIM8_PRSCLR 0
+#define TIM8_PERIOD 1023
+#define TIM16_PERIOD 1000
+#define TIM16_REP_CTR 100
 #define pDOUT_MUTE_1_Pin GPIO_PIN_13
 #define pDOUT_MUTE_1_GPIO_Port GPIOC
 #define pDOUT_MUTE_2_Pin GPIO_PIN_14
@@ -142,8 +151,18 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
-#define TIM2_PERIOD 1023
-#define TIM3_PERIOD 1023
+#define SYSCLK 32000000
+#define TIM2_MULT 2
+#define TIM3_MULT 2
+#define TIM4_MULT 2
+#define TIM8_MULT 2
+#define TIM16_MULT 1
+
+#define TIM2_FREQ_HZ SYSCLK * TIM2_MULT / (TIM2_PRSCLR + 1)
+#define TIM3_FREQ_HZ SYSCLK * TIM3_MULT / (TIM3_PRSCLR + 1)
+#define TIM4_FREQ_HZ SYSCLK * TIM4_MULT / (TIM4_PRSCLR + 1)
+#define TIM8_FREQ_HZ SYSCLK * TIM8_MULT / (TIM8_PRSCLR + 1)
+
 #define WAVETABLE_WIDTH 1024
 #define WAVETABLE_DEPTH 1023
 #define ADC_RESOLUTION 1023

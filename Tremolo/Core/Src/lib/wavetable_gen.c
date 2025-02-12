@@ -31,6 +31,7 @@
  *	\/ -- shape=TRI, depth=1, offset=0.5, phase=0.5
  *
  */
+
 void wavetable_gen(
 	Shape shape,
 	float depth,
@@ -72,9 +73,6 @@ void wavetable_gen(
 			// TODO error
 			break;
 	}
-
-
-
 }
 
 void wavetable_gen_tri(

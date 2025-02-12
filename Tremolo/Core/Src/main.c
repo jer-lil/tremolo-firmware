@@ -54,6 +54,8 @@ typedef struct {
 	uint32_t *Vol;
 } Adc;
 
+uint32_t timer_freqs[] = {TIM2_FREQ_HZ, TIM3_FREQ_HZ, TIM4_FREQ_HZ, TIM8_FREQ_HZ};
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -105,6 +107,9 @@ uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
 
 LED LED_bypass;
 LED LED_tap;
+
+// Time base
+uint64_t elapsed_us = 0;
 
 /* USER CODE END 0 */
 
@@ -183,7 +188,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	  // Read inputs
 	  rate = get_rate(*adc_raw.Rate);
 	  depth = get_depth(*adc_raw.Depth);
@@ -208,7 +213,7 @@ int main(void)
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 3), wavetable_b_hi,
 				  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
+	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -446,7 +451,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 	if (segment == 0) {
 		// Preamble
-		uint8_t preamble[5] = {0xAA, 0xAA, table_index, 0xAA, 0xAA};
+		uint8_t preamble[3] = {0xAA, 0xAA, table_index};
 		hal_status = HAL_UART_Transmit_DMA(huart, preamble, sizeof(preamble));
 		if (hal_status != HAL_OK)
 		{
@@ -462,9 +467,27 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		segment = 1;
 	}
 	else if (segment == 1) {
+		// Timer/Parameter info
+		segment = 2;
+		hal_status = HAL_UART_Transmit_DMA(huart, (uint8_t*)timer_freqs, sizeof(timer_freqs));
+		if (hal_status != HAL_OK)
+		{
+			if (hal_status == HAL_ERROR)
+			{
+				Error_Handler();
+			}
+			else
+			{
+				return;
+			}
+		}
+	}
+	else if (segment == 2) {
 
 		// Table
 		uint8_t* current_table;
+		table_index = (table_index+1) % 4;
+		segment = 0;
 		switch (table_index)
 		{
 			case 0:
@@ -485,18 +508,17 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 		hal_status = HAL_UART_Transmit_DMA(huart, current_table, WAVETABLE_WIDTH*2);
 		if (hal_status != HAL_OK)
+		{
+			if (hal_status == HAL_ERROR)
 			{
-				if (hal_status == HAL_ERROR)
-				{
-					Error_Handler();
-				}
-				else
-				{
-					return;
-				}
+				Error_Handler();
 			}
-		table_index = (table_index+1) % 4;
-		segment = 0;
+			else
+			{
+				return;
+			}
+		}
+
 	}
 	else {
 		Error_Handler();
@@ -504,8 +526,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	//HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	return;
 }
-
-
 
 /* USER CODE END 4 */
 

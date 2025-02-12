@@ -8,7 +8,7 @@
  */
 
 
-#include <lib/wavetable_gen.h>
+#include <Lib/wavetable_gen.h>
 
 /**
  * @brief Generates a single wavetable

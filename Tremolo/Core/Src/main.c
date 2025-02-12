@@ -191,8 +191,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  // See note above; needs to be performed before timer/adc inits
-  //MX_DMA_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -285,6 +284,7 @@ int main(void)
 	  //env = *adc_raw.Trim1;
 	  //phase = *adc_raw.Shape;
 
+	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	  // Read inputs
 	  // TODO do I want a get function for ADC inputs?
@@ -304,6 +304,7 @@ int main(void)
 
 	  //transmit_wavetables();
 
+	  //HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 
 	  // Check for bypass switch state and run state machine
 	  // TODO make this cleaner
@@ -746,46 +747,20 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	// Debug
 
 	num_transmissions++;
+	HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	// End debug
 
 	static uint8_t table_index = 0;
-	uint8_t preamble[5] = {0xAA, 0xAA, table_index, 0xAA, 0xAA};
-	uint8_t* current_table;
-	switch (table_index)
-	{
-		case 0:
-			current_table = (uint8_t*)wavetable_a_lo;
-			break;
-		case 1:
-			current_table = (uint8_t*)wavetable_a_hi;
-			break;
-		case 2:
-			current_table = (uint8_t*)wavetable_b_lo;
-			break;
-		case 3:
-			current_table = (uint8_t*)wavetable_b_hi;
-			break;
-		default:
-			break;
-	}
-
+	static uint8_t segment = 0;
 
 	HAL_StatusTypeDef hal_status;
-	hal_status = HAL_UART_Transmit(huart, preamble, sizeof(preamble), 1);
-	if (hal_status != HAL_OK)
-	{
-		if (hal_status == HAL_ERROR)
-		{
-			Error_Handler();
-		}
-		else
-		{
-			return;
-		}
-	}
-	hal_status = HAL_UART_Transmit_DMA(huart, current_table, WAVETABLE_WIDTH*2);
-	if (hal_status != HAL_OK)
+
+	if (segment == 0) {
+		// Preamble
+		uint8_t preamble[5] = {0xAA, 0xAA, table_index, 0xAA, 0xAA};
+		hal_status = HAL_UART_Transmit_DMA(huart, preamble, sizeof(preamble));
+		if (hal_status != HAL_OK)
 		{
 			if (hal_status == HAL_ERROR)
 			{
@@ -796,7 +771,49 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 				return;
 			}
 		}
-	table_index = (table_index+1) % 4;
+		segment = 1;
+	}
+	else if (segment == 1) {
+
+		// Table
+		uint8_t* current_table;
+		switch (table_index)
+		{
+			case 0:
+				current_table = (uint8_t*)wavetable_a_lo;
+				break;
+			case 1:
+				current_table = (uint8_t*)wavetable_a_hi;
+				break;
+			case 2:
+				current_table = (uint8_t*)wavetable_b_lo;
+				break;
+			case 3:
+				current_table = (uint8_t*)wavetable_b_hi;
+				break;
+			default:
+				break;
+		}
+
+		hal_status = HAL_UART_Transmit_DMA(huart, current_table, WAVETABLE_WIDTH*2);
+		if (hal_status != HAL_OK)
+			{
+				if (hal_status == HAL_ERROR)
+				{
+					Error_Handler();
+				}
+				else
+				{
+					return;
+				}
+			}
+		table_index = (table_index+1) % 4;
+		segment = 0;
+	}
+	else {
+		Error_Handler();
+	}
+	HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	return;
 }
 

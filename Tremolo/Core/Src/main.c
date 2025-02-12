@@ -426,13 +426,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 void My_DMA_XferHalfCpltCallback(DMA_HandleTypeDef *hdma)
 {
 	// TODO don't call function from interrupt
-	set_LED_state(&LED_tap, OFF);
+	//set_LED_state(&LED_tap, OFF);
 	return;
 }
 
 void My_DMA_XferCpltCallback(DMA_HandleTypeDef *hdma)
 {
-	set_LED_state(&LED_tap, ON);
+	//set_LED_state(&LED_tap, ON);
 	return;
 }
 

@@ -48,29 +48,23 @@ void wavetable_gen(
 	uint16_t start_index = (uint16_t)(table_width-1)*phase;
 	// Midpoint_rel is where the triangle "peak" would be if phase=0
 	uint16_t midpoint_rel = (uint16_t)(table_width-1)*offset;
-	// Max value - min value; the actual depth of the table
-	float ampl = (float)depth*table_depth;
-
-
-
-
 
 	switch (shape)
 	{
 		case TRI:
-			wavetable_gen_tri(start_index, midpoint_rel, ampl,
+			wavetable_gen_tri(start_index, midpoint_rel, depth,
 					table, table_width, table_depth);
 			break;
 		case SINE:
-			wavetable_gen_sine_new(start_index, midpoint_rel, ampl,
+			wavetable_gen_sine(start_index, midpoint_rel, depth,
 					table, table_width, table_depth);
 			break;
 		case SQUR:
-			wavetable_gen_square(start_index, midpoint_rel, ampl,
+			wavetable_gen_square(start_index, midpoint_rel, depth,
 					table, table_width, table_depth);
 			break;
 		default:
-			// TODO error
+			Error_Handler();
 			break;
 	}
 }
@@ -78,7 +72,7 @@ void wavetable_gen(
 void wavetable_gen_tri(
 	uint16_t start_index,
 	uint16_t midpoint_rel,
-	float ampl,
+	float depth,
 	uint16_t* table,
 	uint16_t table_width,
 	uint16_t table_depth)
@@ -87,44 +81,48 @@ void wavetable_gen_tri(
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
+	// Max value - min value; the actual depth of the table
+	float ampl = (float)depth*table_depth;
 	// Val is the current table value; it starts at the lowest value
-	float val = (float)table_depth - ampl;
+	float val = (float)table_depth;
 	// The amount by which to increase/decrease val between entries
-	float step_up;
-	float step_down;
+	float step_size;
 
 	table[index] = (uint16_t)val;
 	index = (index + 1) % (table_width);
 
-	// Rising slope of triangle. Skip if offset is all the way left.
+	// Falling slope of triangle. Skip if offset is all the way left.
 	if (midpoint_rel > 0)
 	{
-		step_up = ampl / (float)midpoint_rel;
+		step_size = ampl / (float)midpoint_rel;
 		while (index != midpoint_abs)
 		{
-			val = val+step_up;
+			val = val-step_size;
 			table[index] = (uint16_t)val;
 			index = (index + 1) % (table_width);
 		}
 	}
-	// Falling slope of triangle. Skip if offset is all the way left.
-
-	step_down = ampl / (float)(table_width-midpoint_rel);
-	val = table_depth;
-	while (index!=start_index)
+	// Rising slope of triangle. Skip if offset is all the way right.
+	if (midpoint_rel < table_width)
 	{
-		val = val-step_down;
-		table[index] = (uint16_t)val;
-		index = (index + 1) % (table_width);
+		step_size = ampl / (float)(table_width-midpoint_rel);
+		val = (float)table_depth - ampl;
+		while (index!=start_index)
+		{
+			val = val+step_size;
+			table[index] = (uint16_t)val;
+			index = (index + 1) % (table_width);
+		}
 	}
+
 
 	return;
 }
 
-void wavetable_gen_sine_new(
+void wavetable_gen_sine(
 		uint16_t start_index,
 		uint16_t midpoint_rel,
-		float ampl,
+		float depth,
 		uint16_t* table,
 		uint16_t table_width,
 		uint16_t table_depth)
@@ -137,136 +135,76 @@ void wavetable_gen_sine_new(
 	float source_index = 0;
 	// amount to step through source table for each increment in dest table
 	// float because this will usually be a non-integer, rounded to the nearest int
-	float step_size = 0.5 * (((float)sineTableSize) / (float)midpoint_rel);
+	float step_size = 1;
+	float min_val = (float)table_depth * (1 - depth);
+	// Manually grab first table value, to make the if/while logic work
+	float src_val_raw = sineLookupTable[(uint16_t)source_index];
+	table[dest_index] = (uint16_t)(min_val + (depth * src_val_raw));
 
-	// First half, skip if offset is all the way left
-	if (midpoint_rel > 0)
-	{
-		while (dest_index != midpoint_abs)
-		{
-			// TODO add amplitude scaling
-			table[dest_index] = sineLookupTable[(uint16_t)source_index];
+	// if statements protect from dividing by 0
+	if (midpoint_rel > 0) {
+		// first half of table; skip if midpoint all the way to the left
+		step_size = 0.5 * (((float)sineTableSize) / (float)midpoint_rel);
+		while (dest_index != midpoint_abs) {
+			// Increment source/destination indices
 			source_index += step_size;
 			dest_index = (dest_index + 1) % table_width;
+			// Populate wavetable with next val from lookup, scaled for depth
+			table[dest_index] = (uint16_t)(min_val + \
+								(depth * sineLookupTable[(uint16_t)source_index]));
+
 		}
 	}
-	// Change step size for second half of sine
-	step_size = 0.5 * ((float)sineTableSize) / (float)(table_width - midpoint_rel);
-	while (dest_index != start_index)
-	{
-		// TODO add amplitude scaling
-		table[dest_index] = sineLookupTable[(uint16_t)source_index];
-		source_index += step_size;
-		dest_index = (dest_index + 1) % table_width;
+	if (midpoint_rel < table_width) {
+		// second half of table; skip if midpoint all the way to the right
+		step_size = 0.5 * ((float)sineTableSize) / (float)(table_width - midpoint_rel);
+		source_index = ((float)sineTableSize / 2) - 1;
+		do {
+			source_index += step_size;
+			dest_index = (dest_index + 1) % table_width;
+			table[dest_index] = (uint16_t)(min_val + \
+					(depth * sineLookupTable[(uint16_t)source_index]));
+
+		} while (dest_index != start_index);
 	}
-
-}
-
-// TODO make this more efficient
-// TODO phase does not work
-void wavetable_gen_sine(
-		uint16_t start_index,
-		uint16_t midpoint_rel,
-		float ampl,
-		uint16_t* table,
-		uint16_t table_width,
-		uint16_t table_depth)
-{
-	// midpoint_abs accounts for phase offset
-	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
-	// Index is the current table index
-	uint16_t index = start_index;
-	// Index relative to the start of the period.
-	uint16_t rel_index;
-
-	float ampl_div = ampl / 2;
-	uint16_t offset = (uint16_t)(table_depth - ampl_div);
-	// Effective period of the sine wave in counts
-	float period;
-	// Current index's fraction of the way through 1 period
-	float frac_period;
-
-	// Always set first value to max
-	table[index] = (float)table_depth;
-	index = (index + 1) % (table_width);
-
-	// First half, skip if offset is all the way left
-	if (midpoint_rel > 0)
-	{
-		period = 2 * (float)midpoint_rel;
-
-		while (index != midpoint_abs)
-		{
-			rel_index = index - start_index;
-			if (index >= start_index)
-			{
-				rel_index = index - start_index;
-			}
-			if (index < start_index)
-			{
-				rel_index = index + (table_width - start_index);
-			}
-			frac_period = ((float)rel_index / period);
-			table[index] =  (uint16_t)(offset + ampl_div *
-					cosf(2 * PI * frac_period ));
-			index = (index + 1) % (table_width);
-		}
-	}
-	// Second half of (co)sine
-
-	period = 2 * (table_width - midpoint_rel);
-
-	while (index!=start_index)
-	{
-		if (index >= midpoint_abs)
-		{
-			rel_index = index - midpoint_abs;
-		}
-		if (index < midpoint_abs)
-		{
-			rel_index = index + (table_width - midpoint_abs);
-		}
-		frac_period = ((float)rel_index / period);
-		table[index] =  (uint16_t)(offset + ampl_div *
-				cosf(PI + (2 * PI * frac_period)));
-		index = (index + 1) % (table_width);
-	}
-
-	return;
 }
 
 void wavetable_gen_square(
 		uint16_t start_index,
 		uint16_t midpoint_rel,
-		float ampl,
+		float depth,
 		uint16_t* table,
 		uint16_t table_width,
 		uint16_t table_depth)
 {
 	// midpoint_abs accounts for phase offset
+	start_index = (start_index + (uint16_t)(3*table_width/4)) % table_width;
 	uint16_t midpoint_abs = (midpoint_rel + start_index) % (table_width);
 	// Index is the current table index
 	uint16_t index = start_index;
+	// Max value - min value; the actual depth of the table
+	uint16_t ampl = (uint16_t)(depth*table_depth);
 	// Val is the current table value; it starts at the lowest value
 	uint16_t low_val = table_depth - ampl;
 	uint16_t high_val = table_depth;
 
-	table[index] = low_val;
+	table[index] = high_val;
 	index = (index + 1) % (table_width);
 
-	// Low portion of square wave
+
+	// High portion of square wave
 	if (midpoint_rel > 0)
 	{
 		while (index != midpoint_abs)
 		{
-			table[index] = low_val;
+			table[index] = high_val;
 			index = (index + 1) % (table_width);
 		}
 	}
-	// High portion of square wave
+	// Low portion of square wave
 	while (index!=start_index)
 	{
-		table[index] = high_val;
+		table[index] = low_val;
 		index = (index + 1) % (table_width);
 	}
 	return;

@@ -18,10 +18,13 @@ def get_next_table():
     table_index = int.from_bytes(serialPort.read(1), "little", signed="False") 
     return table_index
 
+def get_params():
+    bytes_in = serialPort.read(16)
+    ints_in = [int.from_bytes(bytes_in[i:i+4], "little", signed="False") for i in range(0, len(bytes_in), 4   )]
+    return ints_in
+
 
 def get_data():
-    # Throw out start of next 2 bytes
-    serialPort.read(2)
     # Read 2048 bytes
     bytes_in = serialPort.read(2048)
     ints_in = [int.from_bytes(bytes_in[i:i+2], "little", signed="False") for i in range(0, len(bytes_in), 2)]
@@ -32,9 +35,9 @@ def get_data():
 if __name__ == "__main__":
     x = np.linspace(0, 1023, 1024)
     table_index = get_next_table()
-    print(table_index)
+    params = get_params()
+    print(params)
     y = get_data()
-    print(y)
     plt.ion()
     fig = plt.figure()
     fig.set_size_inches(8, 6)
@@ -53,15 +56,20 @@ if __name__ == "__main__":
     plt.show()
 
     table_index = get_next_table()
+    params = get_params()
+    print(params)
     new_data = get_data()
     while table_index != 3:
         table_index = get_next_table()
+        params = get_params()
         new_data = get_data()
     
     while 1:
 
         for i in range(4):
             table_index = get_next_table()
+            params = get_params()
+            #print(params)
             
             if table_index == 0:
                 new_data_a_lo = get_data()

@@ -109,8 +109,38 @@ uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
 LED LED_bypass;
 LED LED_tap;
 
-// Time base
-uint64_t elapsed_us = 0;
+/* TODO clean up / move input capture stuff */
+uint32_t elapsed_sec = 0;
+
+uint32_t byp_current_us = 0;
+uint32_t byp_prev_us = 0;
+
+uint32_t tap_current_us = 0;
+uint32_t tap_last_pressed_us = 0;
+uint32_t tap_last_released_us = 0;
+
+#define TAP_LOG_SIZE 16
+#define SW_DEBOUNCE_US 100000
+#define TAP_TIMEOUT_US 2000000
+
+uint32_t tap_logs[TAP_LOG_SIZE] = {0};
+uint8_t tap_log_index = 0;
+
+uint32_t tap_diffs[TAP_LOG_SIZE] = {0};
+uint32_t tap_sum = 0;
+uint32_t tap_avg = 0;
+
+typedef enum {
+	PRESSED,
+	RELEASED,
+	PRESSED_DEBOUNCE,
+	RELEASED_DEBOUNCE,
+}SwitchState;
+
+SwitchState sw_state_tap = RELEASED;
+
+
+/* TODO clean up / move input capture stuff */
 
 /* USER CODE END 0 */
 
@@ -230,6 +260,42 @@ int main(void)
 	  }
 
 	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
+
+	  // TODO move to function
+
+	  tap_sum = 0;
+	  uint32_t tap_diff_index = 0;
+	  uint32_t tap_log_current_index = tap_log_index;
+	  if (tap_log_index > 0)
+	  {
+		  while (tap_log_current_index > 0)
+		  {
+			  tap_diffs[tap_diff_index] = (tap_logs[tap_log_current_index]- tap_logs[tap_log_current_index-1]);
+			  tap_sum += tap_diffs[tap_diff_index];
+			  tap_log_current_index--;
+			  tap_diff_index++;;
+		  }
+	  }
+	  if ((tap_logs[TAP_LOG_SIZE-1] != 0) &&
+			  (tap_logs[0] > tap_logs[TAP_LOG_SIZE-1]) )
+	  {
+		  // tap logs wrapped around
+		  tap_diffs[tap_diff_index] = (tap_logs[0]- tap_logs[TAP_LOG_SIZE-1]);
+		  tap_sum += tap_diffs[tap_diff_index];
+		  tap_log_current_index = TAP_LOG_SIZE-1;
+		  tap_diff_index++;;
+
+		  while (tap_log_current_index > (tap_log_index+1))
+		  {
+			  tap_diffs[tap_diff_index] = (tap_logs[tap_log_current_index]- tap_logs[tap_log_current_index-1]);
+			  tap_sum += tap_diffs[tap_diff_index];
+			  tap_log_current_index--;
+			  tap_diff_index++;;
+		  }
+	  }
+	  if (tap_diffs[0] != 0) {
+		  tap_avg = tap_sum / (tap_diff_index+1);
+	  }
   }
     /* USER CODE END WHILE */
 
@@ -376,9 +442,13 @@ void start_pwm_oc()
 	{
 		Error_Handler();
 	}
-	if ((HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_BYP) |
-		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP) |
-		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP_EXT))!= HAL_OK)
+	if (HAL_TIM_Base_Start_IT(&HTIM_BTN_IN) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	if ((HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_BYP) |
+		HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_TAP) |
+		HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_TAP_EXT))!= HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -421,7 +491,63 @@ void init_LEDs(LED* LED_bypass, LED* LED_tap){
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+		// Bypass switch
+		uint32_t byp_new_us = (1000000 * elapsed_sec) + (HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1) << 4);
+		if (byp_new_us - byp_prev_us > 100000) {
+			byp_current_us = byp_new_us;
+			byp_prev_us = byp_current_us;
+		}
+	}
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) {
+		// Tap switch
 
+		uint32_t tap_new_us = (1000000 * elapsed_sec) + (HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2) << 4);
+		uint32_t us_since_pressed = tap_new_us - tap_last_pressed_us;
+		uint32_t us_since_released = tap_new_us - tap_last_released_us;
+		if (!HAL_GPIO_ReadPin(pDIN_TAP_GPIO_Port, pDIN_TAP_Pin)){
+			// Currently pressed
+			tap_last_pressed_us = tap_new_us;
+			if ((us_since_pressed > SW_DEBOUNCE_US) && (us_since_released > SW_DEBOUNCE_US))
+			{
+				// Log new tap
+				if ((tap_new_us - tap_logs[tap_log_index-1]) > TAP_TIMEOUT_US){
+					// If it's been longer than the timout since last tap, reset logs
+					for (int i=0; i<TAP_LOG_SIZE; i++){
+						tap_logs[i] = 0;
+						tap_diffs[i] = 0;
+					}
+					tap_log_index=0;
+				}
+				if (tap_logs[0] != 0){
+					tap_log_index = (tap_log_index + 1) % TAP_LOG_SIZE;
+				}
+				tap_logs[tap_log_index] = tap_new_us;
+
+
+			}
+
+		}
+		else {
+			// Currently released
+			if (us_since_pressed > SW_DEBOUNCE_US && us_since_released > SW_DEBOUNCE_US)
+			{
+				// Do something?
+			}
+			tap_last_released_us = tap_new_us;
+		}
+	}
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {
+		// External tap
+
+	}
+	return;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	//HAL_GPIO_TogglePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
+	elapsed_sec++;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)

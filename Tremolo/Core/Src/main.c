@@ -376,6 +376,12 @@ void start_pwm_oc()
 	{
 		Error_Handler();
 	}
+	if ((HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_BYP) |
+		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP) |
+		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP_EXT))!= HAL_OK)
+	{
+		Error_Handler();
+	}
 	return;
 }
 

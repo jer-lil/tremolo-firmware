@@ -163,7 +163,7 @@ void wavetable_gen_sine(
 			source_index += step_size;
 			dest_index = (dest_index + 1) % table_width;
 			table[dest_index] = (uint16_t)(min_val + \
-					(depth * sineLookupTable[(uint16_t)source_index]));
+								(depth * sineLookupTable[(uint16_t)source_index]));
 
 		} while (dest_index != start_index);
 	}

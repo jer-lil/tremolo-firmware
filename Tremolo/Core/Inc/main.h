@@ -193,6 +193,11 @@ void Error_Handler(void);
  *  Handle Assignment
  */
 
+// Input capture timer for buttons
+#define HTIM_BTN_IN htim4
+#define TIM_CH_BYP TIM_CHANNEL_1
+#define TIM_CH_TAP TIM_CHANNEL_2
+#define TIM_CH_TAP_EXT TIM_CHANNEL_3
 
 // Volume pwm channels
 #define HTIM_VOL_A htim2

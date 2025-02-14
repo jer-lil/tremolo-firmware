@@ -112,26 +112,8 @@ LED LED_bypass;
 LED LED_tap;
 
 
-/* TODO clean up / move input capture stuff */
 uint32_t elapsed_sec = 0;
 
-uint32_t byp_current_us = 0;
-uint32_t byp_prev_us = 0;
-
-uint32_t tap_current_us = 0;
-uint32_t tap_last_pressed_us = 0;
-uint32_t tap_last_released_us = 0;
-
-#define TAP_LOG_SIZE 16
-#define SW_DEBOUNCE_US 100000
-#define TAP_TIMEOUT_US 2000000
-
-uint32_t tap_logs[TAP_LOG_SIZE] = {0};
-uint8_t tap_log_index = 0;
-
-uint32_t tap_diffs[TAP_LOG_SIZE] = {0};
-uint32_t tap_sum = 0;
-uint32_t tap_avg = 0;
 
 /*
 // TODO redo this to match sm_bypass
@@ -148,6 +130,9 @@ TapState tap_state = WAITING_NEXT_TAP;
 */
 
 volatile EventSw event_sw_byp = SW_IDLE;
+volatile EventSw event_sw_tap = SW_IDLE;
+
+volatile uint32_t latest_tap_us = 0;
 
 /* TODO clean up / move input capture stuff */
 
@@ -225,7 +210,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+
 	  // Read inputs
 	  rate = get_rate(*adc_raw.Rate);
 	  depth = get_depth(*adc_raw.Depth);
@@ -240,6 +225,7 @@ int main(void)
 	  // Set things based on parameters
 	  set_rate(rate, subdiv);
 	  set_volume(vol);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	  // Generate wavetables
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 0), wavetable_a_lo,
 			  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
@@ -253,46 +239,19 @@ int main(void)
 	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	  // Run bypass switch state machine, and reset event to IDLE
+	  // TODO define TIM_IT_CC1 in main.h
 	  EventSw current_event_sw_byp = __atomic_exchange_n(&event_sw_byp, SW_IDLE, __ATOMIC_SEQ_CST);
-	  EventEffect current_event_eff = sm_byp_sw(current_event_sw_byp);
+	  EventSwOutput current_event_eff = sm_byp_sw(current_event_sw_byp);
 	  sm_effect(current_event_eff);
 	  sm_relay_mute(state_effect, &LED_bypass);
 
-	  // TODO move to function / state machine
-
-	  tap_sum = 0;
-	  uint32_t tap_diff_index = 0;
-	  uint32_t tap_log_current_index = tap_log_index;
-	  if (tap_log_index > 0)
-	  {
-		  while (tap_log_current_index > 0)
-		  {
-			  tap_diffs[tap_diff_index] = (tap_logs[tap_log_current_index]- tap_logs[tap_log_current_index-1]);
-			  tap_sum += tap_diffs[tap_diff_index];
-			  tap_log_current_index--;
-			  tap_diff_index++;;
-		  }
-	  }
-	  if ((tap_logs[TAP_LOG_SIZE-1] != 0) &&
-			  (tap_logs[0] > tap_logs[TAP_LOG_SIZE-1]) )
-	  {
-		  // tap logs wrapped around
-		  tap_diffs[tap_diff_index] = (tap_logs[0]- tap_logs[TAP_LOG_SIZE-1]);
-		  tap_sum += tap_diffs[tap_diff_index];
-		  tap_log_current_index = TAP_LOG_SIZE-1;
-		  tap_diff_index++;;
-
-		  while (tap_log_current_index > (tap_log_index+1))
-		  {
-			  tap_diffs[tap_diff_index] = (tap_logs[tap_log_current_index]- tap_logs[tap_log_current_index-1]);
-			  tap_sum += tap_diffs[tap_diff_index];
-			  tap_log_current_index--;
-			  tap_diff_index++;;
-		  }
-	  }
-	  if (tap_diffs[0] != 0) {
-		  tap_avg = tap_sum / (tap_diff_index+1);
-	  }
+	  // Run tap switch state machine
+	  // TODO define TIM_IT_CC2 in main.h
+	  __HAL_TIM_DISABLE_IT(&HTIM_BTN_IN, TIM_IT_CC2);
+	  EventSw current_event_sw_tap = __atomic_exchange_n(&event_sw_tap, SW_IDLE, __ATOMIC_SEQ_CST);
+	  uint32_t current_latest_tap_us = latest_tap_us;
+	  __HAL_TIM_ENABLE_IT(&HTIM_BTN_IN, TIM_IT_CC2);
+	  EventSwOutput sw_sm_output = sm_tap_sw(current_event_sw_tap, current_latest_tap_us);
   }
     /* USER CODE END WHILE */
 
@@ -491,52 +450,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
 		// Bypass switch
 
-		if (HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
-			// Rising edge (released)
-			__atomic_store_n(&event_sw_byp, SW_NEW_RELEASE, __ATOMIC_SEQ_CST);
-		}
-		else {
+		if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
 			// Falling edge (pressed)
 			__atomic_store_n(&event_sw_byp, SW_NEW_PRESS, __ATOMIC_SEQ_CST);
+		}
+		else {
+			// Rising edge (released)
+			__atomic_store_n(&event_sw_byp, SW_NEW_RELEASE, __ATOMIC_SEQ_CST);
 		}
 	}
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) {
 		// Tap switch
-
-		// TODO instead of doing all of this inside the ISR, set a flag and let main() handle it
-		uint32_t tap_new_us = (1000000 * elapsed_sec) + (HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2) << 4);
-		uint32_t us_since_pressed = tap_new_us - tap_last_pressed_us;
-		uint32_t us_since_released = tap_new_us - tap_last_released_us;
 		if (!HAL_GPIO_ReadPin(pDIN_TAP_GPIO_Port, pDIN_TAP_Pin)){
-			// Currently pressed
-			tap_last_pressed_us = tap_new_us;
-			if ((us_since_pressed > SW_DEBOUNCE_US) && (us_since_released > SW_DEBOUNCE_US))
-			{
-				// Log new tap
-				if ((tap_new_us - tap_logs[tap_log_index-1]) > TAP_TIMEOUT_US){
-					// If it's been longer than the timout since last tap, reset logs
-					for (int i=0; i<TAP_LOG_SIZE; i++){
-						tap_logs[i] = 0;
-						tap_diffs[i] = 0;
-					}
-					tap_log_index=0;
-				}
-				if (tap_logs[0] != 0){
-					tap_log_index = (tap_log_index + 1) % TAP_LOG_SIZE;
-				}
-				tap_logs[tap_log_index] = tap_new_us;
-
-
-			}
-
+			// Falling edge (pressed)
+			latest_tap_us = (1000000 * elapsed_sec) + (HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2) << 4);
+			__atomic_store_n(&event_sw_tap, SW_NEW_PRESS, __ATOMIC_SEQ_CST);
 		}
 		else {
 			// Currently released
-			if (us_since_pressed > SW_DEBOUNCE_US && us_since_released > SW_DEBOUNCE_US)
-			{
-				// Do something?
-			}
-			tap_last_released_us = tap_new_us;
+			__atomic_store_n(&event_sw_tap, SW_NEW_RELEASE, __ATOMIC_SEQ_CST);
 		}
 	}
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {

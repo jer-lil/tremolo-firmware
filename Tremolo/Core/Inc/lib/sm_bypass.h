@@ -9,14 +9,15 @@
 #define INC_LIB_SM_BYPASS_H_
 
 #include "Lib/led.h"
+#include <stdbool.h>
 
 typedef enum {
 	SW_UNPRESSED,
-	SW_PRESSED,
-	SW_HELD,
-	SW_WAIT_RELEASE,
+	SW_UNPRESSED_HELD,
 	SW_DEBOUNCE_PRESS,
+	SW_PRESSED,
 	SW_DEBOUNCE_RELEASE,
+	SW_PRESSED_HELD,
 } StateBypSw;
 
 typedef enum {
@@ -31,9 +32,10 @@ typedef enum {
 } StateEffect;
 
 typedef enum {
-	TOGGLE,
+	TRIGGER_FIRST,
+	TRIGGER_CONTINUOUS,
 	IDLE,
-} EventEffect;
+} EventSwOutput;
 
 typedef enum {
 	EFF_ON_UNMUTE,
@@ -47,9 +49,15 @@ typedef enum {
 	EFF_DISABLE,
 } EventRelayMute;
 
-
-EventEffect sm_byp_sw(EventSw);
-void sm_effect(EventEffect);
+// State machine functions
+EventSwOutput sm_byp_sw(EventSw);
+EventSwOutput sm_tap_sw(EventSw, uint32_t);
+void sm_effect(EventSwOutput);
 void sm_relay_mute(StateEffect, LED*);
+
+// Helper functions
+void add_first_tap(uint32_t);
+void add_new_tap(uint32_t, bool);
+
 
 #endif /* INC_LIB_SM_BYPASS_H_ */

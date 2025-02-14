@@ -243,6 +243,9 @@ void Error_Handler(void);
 #define HUART huart1
 #define HDMA_USART hdma_usart1_tx
 
+// Misc. helpers
+#define min(a, b) ((a) < (b) ? (a) : (b))
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

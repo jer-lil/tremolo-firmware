@@ -449,7 +449,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
 		// Bypass switch
-
+		// TODO see if there's a better way to detect edge direction than reading the current pin state
 		if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
 			// Falling edge (pressed)
 			__atomic_store_n(&event_sw_byp, SW_NEW_PRESS, __ATOMIC_SEQ_CST);

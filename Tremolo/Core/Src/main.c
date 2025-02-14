@@ -98,6 +98,8 @@ void My_USART_DMA_XferCpltCallback(DMA_HandleTypeDef*);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+extern StateEffect state_effect;
+
 uint32_t adc_array[ADC_DMA_BUF_LENGTH] = {0};
 Adc adc_raw;
 
@@ -109,8 +111,30 @@ uint16_t wavetable_b_hi[WAVETABLE_WIDTH] = {0};
 LED LED_bypass;
 LED LED_tap;
 
-// Time base
-uint64_t elapsed_us = 0;
+
+uint32_t elapsed_sec = 0;
+
+
+/*
+// TODO redo this to match sm_bypass
+typedef enum {
+	WAITING_FIRST_TAP,
+	WAITING_NEXT_TAP,
+	DEBOUNCE_PRESSED,
+	DEBOUNCE_RELEASED,
+	PRESSED,
+	HELD,
+}TapState;
+
+TapState tap_state = WAITING_NEXT_TAP;
+*/
+
+volatile EventSw event_sw_byp = SW_IDLE;
+volatile EventSw event_sw_tap = SW_IDLE;
+
+volatile uint32_t latest_tap_us = 0;
+
+/* TODO clean up / move input capture stuff */
 
 /* USER CODE END 0 */
 
@@ -153,9 +177,6 @@ int main(void)
    struct subdiv subdiv = {.num = 1, .denom = 4};
 
   /* Iniitalize state machines */
-  StateBypassSw state_bypass_sw = STATE_IDLE;
-  StateEffect state_effect = STATE_BYPASS;
-  StateRelayMute state_relay_mute = STATE_BYPASS_UNMUTE;
 
   /* USER CODE END Init */
 
@@ -189,7 +210,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+
 	  // Read inputs
 	  rate = get_rate(*adc_raw.Rate);
 	  depth = get_depth(*adc_raw.Depth);
@@ -204,6 +225,7 @@ int main(void)
 	  // Set things based on parameters
 	  set_rate(rate, subdiv);
 	  set_volume(vol);
+	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
 	  // Generate wavetables
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 0), wavetable_a_lo,
 			  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
@@ -216,20 +238,20 @@ int main(void)
 
 	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
-	  // Check for bypass switch state and run state machine
-	  // TODO make this cleaner
-	  EventBypassSw event_bypass_sw = EVENT_RELEASED;
-	  if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
-		  event_bypass_sw = EVENT_PRESSED;
-	  }
-	  sm_bypass_sw(&state_bypass_sw, event_bypass_sw, &state_effect);
+	  // Run bypass switch state machine, and reset event to IDLE
+	  // TODO define TIM_IT_CC1 in main.h
+	  EventSw current_event_sw_byp = __atomic_exchange_n(&event_sw_byp, SW_IDLE, __ATOMIC_SEQ_CST);
+	  EventSwOutput current_event_eff = sm_byp_sw(current_event_sw_byp);
+	  sm_effect(current_event_eff);
+	  sm_relay_mute(state_effect, &LED_bypass);
 
-	  EventRelayMute event_relay_mute = EVENT_BYPASS;
-	  if (state_effect == STATE_EFFECT){
-		  event_relay_mute = EVENT_EFFECT;
-	  }
-
-	  sm_relay_mute(&state_relay_mute, event_relay_mute, &LED_bypass);
+	  // Run tap switch state machine
+	  // TODO define TIM_IT_CC2 in main.h
+	  __HAL_TIM_DISABLE_IT(&HTIM_BTN_IN, TIM_IT_CC2);
+	  EventSw current_event_sw_tap = __atomic_exchange_n(&event_sw_tap, SW_IDLE, __ATOMIC_SEQ_CST);
+	  uint32_t current_latest_tap_us = latest_tap_us;
+	  __HAL_TIM_ENABLE_IT(&HTIM_BTN_IN, TIM_IT_CC2);
+	  EventSwOutput sw_sm_output = sm_tap_sw(current_event_sw_tap, current_latest_tap_us);
   }
     /* USER CODE END WHILE */
 
@@ -376,9 +398,13 @@ void start_pwm_oc()
 	{
 		Error_Handler();
 	}
-	if ((HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_BYP) |
-		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP) |
-		HAL_TIM_IC_Start(&HTIM_BTN_IN, TIM_CH_TAP_EXT))!= HAL_OK)
+	if (HAL_TIM_Base_Start_IT(&HTIM_BTN_IN) != HAL_OK)
+	{
+		Error_Handler();
+	}
+	if ((HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_BYP) |
+		HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_TAP) |
+		HAL_TIM_IC_Start_IT(&HTIM_BTN_IN, TIM_CH_TAP_EXT))!= HAL_OK)
 	{
 		Error_Handler();
 	}
@@ -421,7 +447,41 @@ void init_LEDs(LED* LED_bypass, LED* LED_tap){
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+		// Bypass switch
+		// TODO see if there's a better way to detect edge direction than reading the current pin state
+		if (!HAL_GPIO_ReadPin(pDIN_BYP_GPIO_Port, pDIN_BYP_Pin)){
+			// Falling edge (pressed)
+			__atomic_store_n(&event_sw_byp, SW_NEW_PRESS, __ATOMIC_SEQ_CST);
+		}
+		else {
+			// Rising edge (released)
+			__atomic_store_n(&event_sw_byp, SW_NEW_RELEASE, __ATOMIC_SEQ_CST);
+		}
+	}
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) {
+		// Tap switch
+		if (!HAL_GPIO_ReadPin(pDIN_TAP_GPIO_Port, pDIN_TAP_Pin)){
+			// Falling edge (pressed)
+			latest_tap_us = (1000000 * elapsed_sec) + (HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2) << 4);
+			__atomic_store_n(&event_sw_tap, SW_NEW_PRESS, __ATOMIC_SEQ_CST);
+		}
+		else {
+			// Currently released
+			__atomic_store_n(&event_sw_tap, SW_NEW_RELEASE, __ATOMIC_SEQ_CST);
+		}
+	}
+	if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3) {
+		// External tap
 
+	}
+	return;
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	//HAL_GPIO_TogglePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
+	elapsed_sec++;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)

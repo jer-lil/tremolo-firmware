@@ -58,16 +58,14 @@ void Error_Handler(void);
 
 /* Private defines -----------------------------------------------------------*/
 #define TIM2_PERIOD 1023
-#define TIM16_PRSCLR 32
 #define TIM3_PERIOD 1023
+#define TIM8_PRSCLR 0
 #define TIM2_PRSCLR 0
 #define TIM3_PRSCLR 0
-#define TIM3_CLK_DIV 0
 #define TIM4_PRSCLR 1023
-#define TIM8_PRSCLR 0
+#define TIM3_CLK_DIV 0
 #define TIM8_PERIOD 1023
-#define TIM16_PERIOD 1000
-#define TIM16_REP_CTR 100
+#define TIM4_PERIOD 62500
 #define pDOUT_MUTE_1_Pin GPIO_PIN_13
 #define pDOUT_MUTE_1_GPIO_Port GPIOC
 #define pDOUT_MUTE_2_Pin GPIO_PIN_14
@@ -244,6 +242,9 @@ void Error_Handler(void);
 // UART Handles
 #define HUART huart1
 #define HDMA_USART hdma_usart1_tx
+
+// Misc. helpers
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 /* USER CODE END Private defines */
 

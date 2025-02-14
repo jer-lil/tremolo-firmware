@@ -11,41 +11,45 @@
 #include "Lib/led.h"
 
 typedef enum {
-	STATE_IDLE,
-	STATE_WAIT_RELEASE,
-	STATE_DEBOUNCE_PRESS,
-	STATE_DEBOUNCE_RELEASE,
-} StateBypassSw;
+	SW_UNPRESSED,
+	SW_PRESSED,
+	SW_HELD,
+	SW_WAIT_RELEASE,
+	SW_DEBOUNCE_PRESS,
+	SW_DEBOUNCE_RELEASE,
+} StateBypSw;
 
 typedef enum {
-	EVENT_PRESSED,
-	EVENT_RELEASED,
-} EventBypassSw;
+	SW_IDLE,
+	SW_NEW_PRESS,
+	SW_NEW_RELEASE,
+} EventSw;
 
 typedef enum {
-	STATE_EFFECT,
-	STATE_BYPASS,
+	EFF_ON,
+	EFF_BYP,
 } StateEffect;
 
 typedef enum {
-	EVENT_TOGGLE,
+	TOGGLE,
+	IDLE,
 } EventEffect;
 
 typedef enum {
-	STATE_EFFECT_UNMUTE,
-	STATE_EFFECT_MUTE,
-	STATE_BYPASS_UNMUTE,
-	STATE_BYPASS_MUTE,
+	EFF_ON_UNMUTE,
+	EFF_ON_MUTE,
+	EFF_BYP_UNMUTE,
+	EFF_BYP_MUTE,
 } StateRelayMute;
 
 typedef enum {
-	EVENT_EFFECT,
-	EVENT_BYPASS
+	EFF_ENABLE,
+	EFF_DISABLE,
 } EventRelayMute;
 
 
-void sm_bypass_sw(StateBypassSw*, EventBypassSw, StateEffect*);
-void sm_effect(StateEffect*, EventEffect);
-void sm_relay_mute(StateRelayMute*, EventRelayMute, LED*);
+EventEffect sm_byp_sw(EventSw);
+void sm_effect(EventEffect);
+void sm_relay_mute(StateEffect, LED*);
 
 #endif /* INC_LIB_SM_BYPASS_H_ */

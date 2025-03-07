@@ -167,15 +167,15 @@ void Error_Handler(void);
 #define ADC_DMA_BUF_LENGTH 9
 
 // Base prescaler value with quarter note subdiv
-#define PWM_TIM_PRSCLR_BASE 24
+#define PWM_TIM_PRSCLR_BASE 48
 // Used for prescaler normalization to quarter notes
 #define QUARTER 4
 #define TRIPLET 6
 #define EIGHTH 8
 
 // TODO define these programmatically based on min/max LFO rates
-#define RATE_ARR_MIN 256
-#define RATE_ARR_MAX 1024
+#define RATE_ARR_MIN 977 // 16 Hz
+#define RATE_ARR_MAX 15625 // 1 Hz
 
 #define VOL_MAP_MAX 1023
 #define VOL_MAP_MIN 100

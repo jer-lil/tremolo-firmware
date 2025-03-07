@@ -28,37 +28,38 @@
  */
 float get_rate(uint16_t adc_val)
 {
-	float map_val = map_log(adc_val, 0, ADC_RESOLUTION, RATE_ARR_MIN, RATE_ARR_MAX);
+	float map_val = map_log(adc_val, 0, ADC_RESOLUTION-17, RATE_ARR_MIN, RATE_ARR_MAX);
 	return map_val;
 }
 
 float get_volume(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION, 0, 1);
+	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
 	return map_val;
 }
 
 float get_depth(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION, 0, 1);
+	// TODO put calibration in file instead of defining here
+	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
 	return map_val;
 }
 
 float get_offset(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION, 0, 1);
+	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
 	return map_val;
 }
 
 float get_phase_knob(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION, 0, 1);
+	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
 	return map_val;
 }
 
 float get_sense(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION, 0, 1);
+	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
 	return map_val;
 }
 
@@ -85,17 +86,17 @@ struct subdiv get_subdiv()
 	if (!ph_left)
 	{
 		subdiv.num = 1;
-		subdiv.denom = QUARTER;
+		subdiv.denom = 1;
 	}
 	else if (!ph_right)
 	{
 		subdiv.num = 1;
-		subdiv.denom = EIGHTH;
+		subdiv.denom = 4;
 	}
 	else
 	{
-		subdiv.num = 1;
-		subdiv.denom = TRIPLET;
+		subdiv.num = 2;
+		subdiv.denom = 3;
 	}
 	return subdiv;
 }
@@ -156,7 +157,9 @@ Shape get_shape()
  */
 void set_rate(float rate, struct subdiv subdiv){
 	// Set prescaler based on subdiv
-	uint32_t prsclr = PWM_TIM_PRSCLR_BASE * QUARTER * subdiv.num / subdiv.denom;
+	// XXX temporarily hard coding prescaler to make math easier
+	//uint32_t prsclr = PWM_TIM_PRSCLR_BASE * subdiv.num / subdiv.denom;
+	uint32_t prsclr = 4; // LFO_FREQ = RATE_ARR / 15625
 	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_LO, prsclr);
 	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_A_HI, prsclr);
 	__HAL_TIM_SET_PRESCALER(&HTIM_WVFM_B_LO, prsclr);

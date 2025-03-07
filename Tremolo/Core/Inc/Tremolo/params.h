@@ -8,24 +8,6 @@
 #ifndef INC_TREMOLO_PARAMS_H_
 #define INC_TREMOLO_PARAMS_H_
 
-// Base prescaler value with quarter note subdiv
-#define PWM_TIM_PRSCLR_BASE 24
-// Used for prescaler normalization to quarter notes
-#define QUARTER 4
-#define TRIPLET 6
-#define EIGHTH 8
-
-// TODO define these programmatically based on min/max LFO rates
-#define RATE_ARR_MIN 256
-#define RATE_ARR_MAX 1024
-
-#define VOL_MAP_MAX 1023
-#define VOL_MAP_MIN 100
-
-// 0-2.5V (about the max I've seen the circuit output)
-#define ENV_MIN 0
-#define ENV_MAX 775
-
 /**
  * @brief Enum for discrete phase states, for toggle switch control
  *

@@ -98,13 +98,14 @@ float map_rate_pseudo_log(struct Param* self)
  * @param val_min
  * @param map_min
  * @param map_max
- * @param invert If invert = 1, inverts so that val_max maps to map_min
  * @return
  */
 float map_lin(float val, float val_min, float val_max,
 		float map_min, float map_max)
 {
-	// Percentage of val across val range
+	// First, bound val between val_min and val_max
+	val = fmaxf(fminf(val, val_max), val_min);
+
 	float frac = (val - val_min) / (val_max - val_min);
 	float ret = map_min + frac * (map_max - map_min);
 	return ret;

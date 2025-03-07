@@ -120,9 +120,9 @@ PhaseToggle get_phase_toggle(){
 float get_phase(float phase, uint16_t index)
 {
 	if (index == 0) { return 0; }
-	else if (index == 1) { return phase; }
+	else if (index == 1) { return fmax(0, phase-0.5); }
 	else if (index == 2) { return fmin(0.5, phase); }
-	else if (index == 3) { return fmax(0, phase-0.5); }
+	else if (index == 3) { return  phase; }
 	else { return 0; }
 }
 

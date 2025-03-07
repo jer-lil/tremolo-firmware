@@ -553,8 +553,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 		// Table
 		uint8_t* current_table;
-		table_index = (table_index+1) % 4;
-		segment = 0;
 		switch (table_index)
 		{
 			case 0:
@@ -572,6 +570,9 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 			default:
 				break;
 		}
+
+		table_index = (table_index+1) % 4;
+		segment = 0;
 
 		hal_status = HAL_UART_Transmit_DMA(huart, current_table, WAVETABLE_WIDTH*2);
 		if (hal_status != HAL_OK)

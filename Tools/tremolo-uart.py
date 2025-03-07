@@ -46,10 +46,10 @@ if __name__ == "__main__":
     ax.set_ylim([0, 1023+16])
     ax.set_xlim([-16, 1023+16])
 
-    line_a_lo, = ax.plot(x, y, 'r-', label='CH A - High Frequencies')
-    line_a_hi, = ax.plot(x, y, 'g-', label='CH A - Low Frequencies')
-    line_b_lo, = ax.plot(x, y, 'b-', label='CH B - High Frequencies')
-    line_b_hi, = ax.plot(x, y, 'y-', label='CH B - Low Frequencies')
+    line_a_lo, = ax.plot(x, y, 'r-', label='CH A - Bass Frequencies')
+    line_a_hi, = ax.plot(x, y, 'g-', label='CH A - Treble Frequencies')
+    line_b_lo, = ax.plot(x, y, 'b-', label='CH B - Bass Frequencies')
+    line_b_hi, = ax.plot(x, y, 'y-', label='CH B - Treble Frequencies')
     
     plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
     plt.tight_layout()
@@ -63,6 +63,16 @@ if __name__ == "__main__":
         table_index = get_next_table()
         params = get_params()
         new_data = get_data()
+    
+    #debug
+    for i in range(4):
+        table_index = get_next_table()
+        params = get_params()
+        new_data = get_data()
+
+        print(f'index = {table_index}')
+        print(f'new data = {new_data}')
+    #end debug
     
     while 1:
 

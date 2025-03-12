@@ -136,6 +136,8 @@ volatile uint32_t latest_tap_us = 0;
 
 /* TODO clean up / move input capture stuff */
 
+float vol = 0;
+
 /* USER CODE END 0 */
 
 /**
@@ -164,7 +166,7 @@ int main(void)
    float depth;
    float offset;
    float phase;
-   float vol;
+   //float vol;
    float sense;
 
    float env;
@@ -204,6 +206,9 @@ int main(void)
   start_dma();
   start_pwm_oc();
 
+  HAL_GPIO_WritePin(pDOUT_LED1_R_GPIO_Port, pDOUT_LED1_R_Pin, LED_PIN_SET);
+  HAL_GPIO_WritePin(pDOUT_LED1_B_GPIO_Port, pDOUT_LED1_B_Pin, LED_PIN_SET);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -225,7 +230,7 @@ int main(void)
 	  // Set things based on parameters
 	  set_rate(rate, subdiv);
 	  set_volume(vol);
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_RESET);
+
 	  // Generate wavetables
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 0), wavetable_a_lo,
 			  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
@@ -235,8 +240,6 @@ int main(void)
 				  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
 	  wavetable_gen(shape, depth, offset, get_phase(phase, 3), wavetable_b_hi,
 				  WAVETABLE_WIDTH, WAVETABLE_DEPTH);
-
-	  HAL_GPIO_WritePin(pDOUT_LED2_R_GPIO_Port, pDOUT_LED2_R_Pin, LED_PIN_SET);
 
 	  // Run bypass switch state machine, and reset event to IDLE
 	  // TODO define TIM_IT_CC1 in main.h
@@ -480,7 +483,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	//HAL_GPIO_TogglePin(pDOUT_LED2_B_GPIO_Port, pDOUT_LED2_B_Pin);
 	elapsed_sec++;
 }
 

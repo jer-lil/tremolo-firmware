@@ -34,7 +34,8 @@ float get_rate(uint16_t adc_val)
 
 float get_volume(uint16_t adc_val)
 {
-	float map_val = map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1);
+	// XXX put pow into mapping function
+	float map_val = pow(map_lin(adc_val, 0, ADC_RESOLUTION-17, 0, 1), 4);
 	return map_val;
 }
 
@@ -172,8 +173,8 @@ void set_rate(float rate, struct subdiv subdiv){
 }
 
 void set_volume(float vol){
-	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)vol);
-	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)vol);
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_A, TIM_CH_VOL_A, (uint16_t)(vol*1023));
+	__HAL_TIM_SET_COMPARE(&HTIM_VOL_B, TIM_CH_VOL_B, (uint16_t)(vol*1023));
 }
 
 /**

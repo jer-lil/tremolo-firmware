@@ -1,4 +1,20 @@
-*.o
+### Eclipse ###
+.metadata
+bin/
+tmp/
+*.tmp
 *.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+### Other files/folders for STM32CubeIDE ###
 Debug/
 Debug/**
+Release/
+Release**
+.settings/
+*.o
